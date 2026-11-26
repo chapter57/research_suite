@@ -66,4 +66,6 @@ export interface Project {
   /** Set when the project came from someone else's export (view-only). */
   imported?: boolean;
   author?: string;
+  /** Heading details for the MLA-formatted paper. */
+  mla?: { name: string; instructor: string; course: string; date: string };
 }

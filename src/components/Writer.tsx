@@ -7,12 +7,12 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { course } from "@/config/course";
-import { downloadBlob, safeFilename } from "@/lib/download";
 import { ReplayEngine, wordCount } from "@/lib/replay";
 import { getDocSchema, schemaExtensions } from "@/lib/schema";
-import { appendEvents, exportProject, getEvents, getProject, putProject } from "@/lib/store";
+import { appendEvents, getEvents, getProject, putProject } from "@/lib/store";
 import type { AiEvent, Project, RecEvent } from "@/lib/types";
 import CoachPanel from "./CoachPanel";
+import DownloadMenu from "./DownloadMenu";
 
 export default function Writer({ projectId }: { projectId: string }) {
   const [loaded, setLoaded] = useState<{ project: Project; doc: PMNode; seq: number; failures: number } | null>(null);
@@ -60,6 +60,8 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
   const privateRef = useRef(false);
   const privateDirty = useRef(false);
   const editorRef = useRef<Editor | null>(null);
+  // Latest document, kept outside the editor so saving still works after it closes.
+  const latestDoc = useRef<PMNode | null>(null);
 
   const flush = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -67,17 +69,19 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
     chain.current = chain.current.then(async () => {
       const batch = buffer.current;
       buffer.current = [];
-      const ed = editorRef.current;
       try {
         if (batch.length) {
           await appendEvents(project.current.id, seq.current, batch);
           seq.current += batch.length;
         }
-        if (ed) {
+        const stored = await getProject(project.current.id);
+        if (stored) project.current = { ...stored, title: project.current.title };
+        const latest = latestDoc.current;
+        if (latest) {
           project.current = {
             ...project.current,
-            doc: ed.getJSON() as Record<string, unknown>,
-            wordCount: wordCount(ed.getText()),
+            doc: latest.toJSON() as Record<string, unknown>,
+            wordCount: wordCount(latest.textBetween(0, latest.content.size, "\n", " ")),
             eventCount: seq.current,
             updatedAt: Date.now(),
           };
@@ -109,6 +113,7 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
     shouldRerenderOnTransaction: true,
     onTransaction: ({ transaction, editor: ed }) => {
       if (!transaction.docChanged) return;
+      latestDoc.current = transaction.doc;
       setWords(wordCount(ed.getText()));
       if (privateRef.current) {
         privateDirty.current = true;
@@ -175,15 +180,6 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
     return ed.getText().slice(0, course.maxExcerptChars);
   }, []);
 
-  async function onExport() {
-    await flush();
-    const name = prompt("Your name (included in the file so your instructor knows whose it is):", project.current.author || "");
-    if (name === null) return;
-    project.current = { ...project.current, author: name.trim() };
-    await flush();
-    downloadBlob(await exportProject(project.current.id, name.trim()), `${safeFilename(project.current.title)}.rsproj.json`);
-  }
-
   const tb = (label: string, action: () => void, active?: boolean, titleText?: string) => (
     <button className={active ? "on" : ""} onMouseDown={(e) => e.preventDefault()} onClick={action} title={titleText || label}>
       {label}
@@ -209,8 +205,7 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
           </button>
         )}
         <Link href={`/replay/${initial.id}`} onClick={() => flush()}><button>Replay &amp; reflect</button></Link>
-        <button onClick={onExport}>Export</button>
-        <button onClick={() => window.print()} title="Print or save as PDF">Print</button>
+        <DownloadMenu projectId={initial.id} beforeExport={flush} />
       </div>
       <div className={`workspace ${coachOn ? "with-coach" : ""}`}>
         <div className="paper-wrap">

@@ -6,11 +6,11 @@ import { Decoration, DecorationSet, EditorView } from "@tiptap/pm/view";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { modeById, type ModeId } from "@/lib/coach/modes";
-import { downloadBlob, safeFilename } from "@/lib/download";
 import { buildTimeline, computeStats, countAtTime, formatDuration, ReplayEngine } from "@/lib/replay";
 import { getDocSchema } from "@/lib/schema";
-import { deleteReflection, exportProject, getEvents, getProject, getReflections, newId, putReflection } from "@/lib/store";
+import { deleteReflection, getEvents, getProject, getReflections, newId, putReflection } from "@/lib/store";
 import type { AiEvent, Project, RecEvent, Reflection } from "@/lib/types";
+import DownloadMenu from "./DownloadMenu";
 
 const SPEEDS = [1, 2, 4, 8, 16, 32];
 
@@ -226,16 +226,6 @@ function PlayerInner({ project, events, reflections: initialRefs }: { project: P
     setRefs((rs) => rs.filter((r) => r.id !== id));
   }
 
-  async function onExport() {
-    let author = project.author;
-    if (!readOnly) {
-      const name = prompt("Your name (included in the file so your instructor knows whose it is):", project.author || "");
-      if (name === null) return;
-      author = name.trim();
-    }
-    downloadBlob(await exportProject(project.id, author), `${safeFilename(project.title)}.rsproj.json`);
-  }
-
   // ---- Derived display ----
   const moment = count > 0 ? events[count - 1] : null;
   const lastAi = [...aiIdx].reverse().find((i) => i < count);
@@ -262,7 +252,7 @@ function PlayerInner({ project, events, reflections: initialRefs }: { project: P
         <span className="muted small">Replay &amp; reflect</span>
         <span className="spacer" />
         {!readOnly && <Link href={`/write/${project.id}`}><button>Back to writing</button></Link>}
-        <button onClick={onExport}>Export</button>
+        <DownloadMenu projectId={project.id} />
       </div>
       {readOnly && (
         <div className="banner">
