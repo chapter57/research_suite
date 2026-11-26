@@ -7,6 +7,8 @@ helps students think, read, research and revise. It does not write for them.
 The first course pack is **ENGL 102: Composition and Critical Reading**, built around the course's skill badges
 (Reading Actively, Critiquing, Analyzing, Synthesizing II, Imagining Readers, Shifting Styles II, Paragraphing II).
 
+**Live site:** https://researchsuites.vercel.app/ (deployed by Vercel from the `main` branch).
+
 **User's manual:** [Research Suite v1 — User's Manual](https://claude.ai/artifact/GNbbEEJmcCGmwdpzcy8URr) (for students and instructors).
 
 ## What's in version 1.0
