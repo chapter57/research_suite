@@ -7,7 +7,7 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { buildTimeline, computeStats, formatDuration, ReplayEngine, type ChangeRange } from "./replay";
 import { getDocSchema } from "./schema";
-import { getEvents, getProject, getReflections } from "./store";
+import { getEvents, getProject, getReflections, getSnapshots } from "./store";
 import type { Reflection } from "./types";
 
 export const VIDEO_W = 1280;
@@ -184,10 +184,19 @@ export async function exportReplayVideo(
 ): Promise<{ blob: Blob; ext: string }> {
   const project = await getProject(projectId);
   if (!project) throw new Error("Project not found.");
-  const [events, refs] = await Promise.all([getEvents(projectId), getReflections(projectId)]);
+  const [events, refs, snaps] = await Promise.all([getEvents(projectId), getReflections(projectId), getSnapshots(projectId)]);
   if (!events.length) throw new Error("Nothing has been recorded yet.");
 
-  const engine = new ReplayEngine(getDocSchema(), events);
+  const schema = getDocSchema();
+  const engine = new ReplayEngine(schema, events);
+  for (const sn of snaps) {
+    if (sn.seq > events.length) continue;
+    try {
+      engine.seed(sn.seq, schema.nodeFromJSON(sn.doc));
+    } catch {
+      /* replay instead */
+    }
+  }
   const timeline = buildTimeline(events);
   const stats = computeStats(events);
   const speed = Math.max(1, timeline.total / ((opts.targetSeconds ?? 150) * 1000));

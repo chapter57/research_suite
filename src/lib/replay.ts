@@ -49,16 +49,36 @@ export class ReplayEngine {
   private events: RecEvent[];
   private base: Node;
   private every: number;
-  private checkpoints: Node[] = []; // checkpoints[k] = doc after k*every events
+  /** Known documents: known.get(n) = the doc after the first n events. */
+  private known = new Map<number, Node>();
+  private keys: number[] = []; // sorted keys of `known`
   private parsed = new Map<number, Step[]>();
   failures = 0;
 
-  constructor(schema: Schema, events: RecEvent[], checkpointEvery = 200) {
+  /**
+   * @param base the document before the first event (an empty doc by default).
+   *   Pass a saved snapshot to replay only the events recorded after it.
+   */
+  constructor(schema: Schema, events: RecEvent[], checkpointEvery = 200, base?: Node) {
     this.schema = schema;
     this.events = events;
     this.every = checkpointEvery;
-    this.base = schema.topNodeType.createAndFill()!;
-    this.checkpoints[0] = this.base;
+    this.base = base ?? schema.topNodeType.createAndFill()!;
+    this.seed(0, this.base);
+  }
+
+  /** Tell the engine the document after the first `count` events (e.g. a saved snapshot). */
+  seed(count: number, doc: Node) {
+    if (this.known.has(count)) return;
+    this.known.set(count, doc);
+    let lo = 0;
+    let hi = this.keys.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.keys[mid] < count) lo = mid + 1;
+      else hi = mid;
+    }
+    this.keys.splice(lo, 0, count);
   }
 
   get length() {
@@ -107,15 +127,20 @@ export class ReplayEngine {
   /** The document after the first `count` events. */
   docAt(count: number): Node {
     count = Math.max(0, Math.min(count, this.events.length));
-    const k = Math.floor(count / this.every);
-    // Fill checkpoints up to k.
-    for (let c = this.checkpoints.length; c <= k; c++) {
-      let d = this.checkpoints[c - 1];
-      for (let i = (c - 1) * this.every; i < c * this.every; i++) d = this.applyEvent(d, i).doc;
-      this.checkpoints[c] = d;
+    // Nearest known document at or before `count`.
+    let lo = 0;
+    let hi = this.keys.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.keys[mid] <= count) lo = mid;
+      else hi = mid - 1;
     }
-    let doc = this.checkpoints[k];
-    for (let i = k * this.every; i < count; i++) doc = this.applyEvent(doc, i).doc;
+    const start = this.keys[lo];
+    let doc = this.known.get(start)!;
+    for (let i = start; i < count; i++) {
+      doc = this.applyEvent(doc, i).doc;
+      if ((i + 1) % this.every === 0) this.seed(i + 1, doc);
+    }
     return doc;
   }
 

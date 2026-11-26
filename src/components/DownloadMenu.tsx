@@ -73,7 +73,7 @@ function DownloadDialog({ projectId, beforeExport, onClose }: { projectId: strin
   const projectFile = () =>
     run("file", async () => {
       const p = await saveInfo();
-      downloadBlob(await exportProject(projectId, info.name.trim() || p.author), `${safeFilename(p.title)}.rsproj.json`);
+      downloadBlob(await exportProject(projectId, info.name.trim() || p.author), `${safeFilename(p.title)}.rsproj`);
     });
 
   const makeVideo = () =>

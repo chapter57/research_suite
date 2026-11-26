@@ -9,13 +9,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { course } from "@/config/course";
 import { ReplayEngine, wordCount } from "@/lib/replay";
 import { getDocSchema, schemaExtensions } from "@/lib/schema";
-import { appendEvents, getEvents, getProject, putProject } from "@/lib/store";
+import { MERGE_GAP_MS, mergeTyping, startTyping, stepsToJSON, type PendingTyping } from "@/lib/compact";
+import { appendEvents, getEvents, getEventsFrom, getProject, latestSnapshot, putProject, putSnapshot } from "@/lib/store";
 import type { AiEvent, Project, RecEvent } from "@/lib/types";
 import CoachPanel from "./CoachPanel";
 import DownloadMenu from "./DownloadMenu";
 
 export default function Writer({ projectId }: { projectId: string }) {
-  const [loaded, setLoaded] = useState<{ project: Project; doc: PMNode; seq: number; failures: number } | null>(null);
+  const [loaded, setLoaded] = useState<{ project: Project; doc: PMNode; seq: number; snapSeq: number; failures: number } | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -23,10 +24,24 @@ export default function Writer({ projectId }: { projectId: string }) {
       const project = await getProject(projectId);
       if (!project) return setError("Project not found on this device.");
       if (project.imported) return setError("This is a shared recording. It can be replayed but not edited.");
+      const schema = getDocSchema();
+      // Open from the latest snapshot and replay only what came after it.
+      const snap = await latestSnapshot(projectId);
+      if (snap) {
+        try {
+          const base = schema.nodeFromJSON(snap.doc);
+          const tail = await getEventsFrom(projectId, snap.seq);
+          const engine = new ReplayEngine(schema, tail, 200, base);
+          const doc = engine.final();
+          return setLoaded({ project, doc, seq: snap.seq + tail.length, snapSeq: snap.seq, failures: engine.failures });
+        } catch (e) {
+          console.warn("Snapshot unusable; replaying the full recording", e);
+        }
+      }
       const events = await getEvents(projectId);
-      const engine = new ReplayEngine(getDocSchema(), events);
+      const engine = new ReplayEngine(schema, events);
       const doc = engine.final();
-      setLoaded({ project, doc, seq: events.length, failures: engine.failures });
+      setLoaded({ project, doc, seq: events.length, snapSeq: 0, failures: engine.failures });
     })().catch((e) => setError(String(e)));
   }, [projectId]);
 
@@ -44,7 +59,12 @@ function insertedChars(tr: Transaction): number {
   return n;
 }
 
-function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { project: Project; doc: PMNode; seq: number; failures: number }) {
+/** Save a snapshot of the document after this many new events. */
+const SNAPSHOT_EVERY = 400;
+
+type Entry = { e: RecEvent; doc: PMNode };
+
+function WriterInner({ project: initial, doc, seq: initialSeq, snapSeq, failures }: { project: Project; doc: PMNode; seq: number; snapSeq: number; failures: number }) {
   const project = useRef<Project>(initial);
   const [title, setTitle] = useState(initial.title);
   const [words, setWords] = useState(initial.wordCount);
@@ -53,8 +73,14 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
 
   // ---- Recorder ----
-  const buffer = useRef<RecEvent[]>([]);
+  // Finished events wait in `buffer` until they are written to storage. Plain
+  // typing collects in `pending` and becomes one event per word. Each entry
+  // keeps the document as it stood after that event, for snapshots.
+  const buffer = useRef<Entry[]>([]);
+  const pending = useRef<{ typing: PendingTyping; doc: PMNode } | null>(null);
+  const loggedDoc = useRef<PMNode>(doc); // the document the recording describes so far
   const seq = useRef(initialSeq);
+  const lastSnap = useRef(snapSeq);
   const chain = useRef<Promise<void>>(Promise.resolve());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const privateRef = useRef(false);
@@ -63,47 +89,108 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
   // Latest document, kept outside the editor so saving still works after it closes.
   const latestDoc = useRef<PMNode | null>(null);
 
-  const flush = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    chain.current = chain.current.then(async () => {
-      const batch = buffer.current;
-      buffer.current = [];
-      try {
-        if (batch.length) {
-          await appendEvents(project.current.id, seq.current, batch);
-          seq.current += batch.length;
-        }
-        const stored = await getProject(project.current.id);
-        if (stored) project.current = { ...stored, title: project.current.title };
-        const latest = latestDoc.current;
-        if (latest) {
-          project.current = {
-            ...project.current,
-            doc: latest.toJSON() as Record<string, unknown>,
-            wordCount: wordCount(latest.textBetween(0, latest.content.size, "\n", " ")),
-            eventCount: seq.current,
-            updatedAt: Date.now(),
-          };
-        }
-        await putProject(project.current);
-        setSaveState("saved");
-      } catch (e) {
-        console.error(e);
-        buffer.current = [...batch, ...buffer.current];
-        setSaveState("error");
-      }
-    });
-    return chain.current;
+  /** Something typed or recorded hasn't reached storage yet. */
+  const unsaved = useRef(false);
+
+  const closePending = useCallback(() => {
+    const p = pending.current;
+    if (!p) return;
+    pending.current = null;
+    buffer.current.push({ e: { type: "steps", t: p.typing.t, steps: stepsToJSON(p.typing.steps), inserted: p.typing.inserted }, doc: p.doc });
   }, []);
 
-  const record = useCallback(
-    (e: RecEvent) => {
-      buffer.current.push(e);
-      setSaveState("saving");
-      if (!timer.current) timer.current = setTimeout(flush, 1200);
+  const schedule = useRef<() => void>(() => {});
+  const saveInRef = useRef<(delay: number) => void>(() => {});
+
+  /** Write recorded events to storage. `force` also closes the word being typed. */
+  const flush = useCallback(
+    (force = false) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      if (pending.current && (force || Date.now() - pending.current.typing.t > MERGE_GAP_MS)) closePending();
+      chain.current = chain.current.then(async () => {
+        const batch = buffer.current;
+        buffer.current = [];
+        try {
+          if (batch.length) {
+            await appendEvents(project.current.id, seq.current, batch.map((b) => b.e));
+            seq.current += batch.length;
+            const after = batch[batch.length - 1].doc;
+            if (seq.current - lastSnap.current >= SNAPSHOT_EVERY || (force && seq.current > lastSnap.current)) {
+              await putSnapshot(project.current.id, seq.current, after.toJSON() as Record<string, unknown>);
+              lastSnap.current = seq.current;
+            }
+          }
+          // Save the word still being typed in the next slot. If more letters
+          // are added, the same slot is overwritten, so nothing is lost if the
+          // page closes mid-word.
+          const p = pending.current;
+          if (p) {
+            await appendEvents(project.current.id, seq.current, [
+              { type: "steps", t: p.typing.t, steps: stepsToJSON(p.typing.steps), inserted: p.typing.inserted },
+            ]);
+          }
+          const stored = await getProject(project.current.id);
+          if (stored) project.current = { ...stored, title: project.current.title };
+          const latest = latestDoc.current;
+          if (latest) {
+            project.current = {
+              ...project.current,
+              doc: latest.toJSON() as Record<string, unknown>,
+              wordCount: wordCount(latest.textBetween(0, latest.content.size, "\n", " ")),
+              eventCount: seq.current,
+              updatedAt: Date.now(),
+            };
+          }
+          await putProject(project.current);
+          unsaved.current = buffer.current.length > 0;
+          setSaveState(buffer.current.length ? "saving" : "saved");
+        } catch (e) {
+          console.error(e);
+          buffer.current = [...batch, ...buffer.current];
+          setSaveState("error");
+        }
+        if (buffer.current.length) schedule.current();
+        // Close the word once typing pauses, so it becomes a finished event.
+        else if (pending.current) saveInRef.current(MERGE_GAP_MS + 100);
+      });
+      return chain.current;
+    },
+    [closePending],
+  );
+  const timerDue = useRef(0);
+  /** Run a save at `delay` ms from now, unless one is already due sooner. */
+  const saveIn = useCallback(
+    (delay: number) => {
+      const due = Date.now() + delay;
+      if (timer.current && timerDue.current <= due) return;
+      if (timer.current) clearTimeout(timer.current);
+      timerDue.current = due;
+      timer.current = setTimeout(() => flush(), delay);
     },
     [flush],
+  );
+  saveInRef.current = saveIn;
+  schedule.current = () => {
+    unsaved.current = true;
+    saveIn(400);
+  };
+  const flushAll = useCallback(() => flush(true), [flush]);
+
+  /** Record a finished event; `after` is the document once it has happened. */
+  const record = useCallback(
+    (e: RecEvent, after?: PMNode) => {
+      closePending();
+      if (after) loggedDoc.current = after;
+      buffer.current.push({ e, doc: loggedDoc.current });
+      // A "session started" marker alone isn't worth a leave-page warning.
+      if (e.type === "session") saveInRef.current(400);
+      else {
+        setSaveState("saving");
+        schedule.current();
+      }
+    },
+    [closePending],
   );
 
   const editor = useEditor({
@@ -118,17 +205,27 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
       if (privateRef.current) {
         privateDirty.current = true;
         setSaveState("saving");
-        if (!timer.current) timer.current = setTimeout(flush, 1200);
+        schedule.current();
         return;
       }
       const ui = transaction.getMeta("uiEvent") as "paste" | "cut" | "drop" | undefined;
-      record({
-        type: "steps",
-        t: Date.now(),
-        steps: transaction.steps.map((s) => s.toJSON() as Record<string, unknown>),
-        ...(ui ? { ui } : {}),
-        inserted: insertedChars(transaction),
-      });
+      const now = Date.now();
+      const inserted = insertedChars(transaction);
+      if (ui) {
+        record({ type: "steps", t: now, steps: stepsToJSON(transaction.steps), ui, inserted }, transaction.doc);
+        return;
+      }
+      // Plain typing: fold into the current word when possible.
+      const p = pending.current;
+      if (p && mergeTyping(p.typing, now, transaction.steps, inserted)) {
+        p.doc = transaction.doc;
+      } else {
+        closePending();
+        pending.current = { typing: startTyping(now, transaction.steps, inserted), doc: transaction.doc };
+      }
+      loggedDoc.current = transaction.doc;
+      setSaveState("saving");
+      schedule.current();
     },
   });
 
@@ -137,18 +234,28 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
     if (!editor) return;
     editorRef.current = editor;
     record({ type: "session", t: Date.now() });
-    if (failures > 0 || !editor.state.doc.eq(doc)) {
-      record({ type: "reset", t: Date.now(), doc: editor.getJSON() as Record<string, unknown>, reason: "repair" });
+    // Compare content, not objects: the editor builds its own copy of the schema.
+    if (failures > 0 || JSON.stringify(editor.state.doc.toJSON()) !== JSON.stringify(doc.toJSON())) {
+      record({ type: "reset", t: Date.now(), doc: editor.getJSON() as Record<string, unknown>, reason: "repair" }, editor.state.doc);
     }
     const onHide = () => {
-      if (document.visibilityState === "hidden") flush();
+      if (document.visibilityState === "hidden") flushAll();
+    };
+    // If the page is closed in the split second before a save finishes, ask first.
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!unsaved.current) return;
+      flushAll();
+      e.preventDefault();
+      e.returnValue = "";
     };
     document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", flush);
+    window.addEventListener("pagehide", flushAll);
+    window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", flush);
-      flush();
+      window.removeEventListener("pagehide", flushAll);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      flushAll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
@@ -157,7 +264,7 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
     const next = !privateRef.current;
     if (!next && privateDirty.current && editorRef.current) {
       // Leaving private mode: store the result as a single jump in the timeline.
-      record({ type: "reset", t: Date.now(), doc: editorRef.current.getJSON() as Record<string, unknown>, reason: "private" });
+      record({ type: "reset", t: Date.now(), doc: editorRef.current.getJSON() as Record<string, unknown>, reason: "private" }, editorRef.current.state.doc);
       privateDirty.current = false;
     }
     privateRef.current = next;
@@ -204,8 +311,8 @@ function WriterInner({ project: initial, doc, seq: initialSeq, failures }: { pro
             AI coach: {coachOn ? "On" : "Off"}
           </button>
         )}
-        <Link href={`/replay/${initial.id}`} onClick={() => flush()}><button>Replay &amp; reflect</button></Link>
-        <DownloadMenu projectId={initial.id} beforeExport={flush} />
+        <Link href={`/replay/${initial.id}`} onClick={() => flushAll()}><button>Replay &amp; reflect</button></Link>
+        <DownloadMenu projectId={initial.id} beforeExport={flushAll} />
       </div>
       <div className={`workspace ${coachOn ? "with-coach" : ""}`}>
         <div className="paper-wrap">

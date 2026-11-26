@@ -49,7 +49,7 @@ export default function Home() {
       <div className="row" style={{ marginTop: 16 }}>
         <button className="primary" onClick={onNew}>New project</button>
         <button onClick={() => fileRef.current?.click()}>Open a shared recording…</button>
-        <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={onImport} />
+        <input ref={fileRef} type="file" accept=".rsproj,.json,application/json,application/gzip" hidden onChange={onImport} />
       </div>
       {error && <p className="error">{error}</p>}
 

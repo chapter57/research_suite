@@ -8,21 +8,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { modeById, type ModeId } from "@/lib/coach/modes";
 import { buildTimeline, computeStats, countAtTime, formatDuration, ReplayEngine } from "@/lib/replay";
 import { getDocSchema } from "@/lib/schema";
-import { deleteReflection, getEvents, getProject, getReflections, newId, putReflection } from "@/lib/store";
+import { deleteReflection, getEvents, getSnapshots, getProject, getReflections, newId, putReflection } from "@/lib/store";
 import type { AiEvent, Project, RecEvent, Reflection } from "@/lib/types";
 import DownloadMenu from "./DownloadMenu";
 
 const SPEEDS = [1, 2, 4, 8, 16, 32];
 
 export default function Player({ projectId }: { projectId: string }) {
-  const [data, setData] = useState<{ project: Project; events: RecEvent[]; reflections: Reflection[] } | null>(null);
+  const [data, setData] = useState<{ project: Project; events: RecEvent[]; reflections: Reflection[]; snapshots: { seq: number; doc: Record<string, unknown> }[] } | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     (async () => {
       const project = await getProject(projectId);
       if (!project) return setError("Project not found on this device.");
-      const [events, reflections] = await Promise.all([getEvents(projectId), getReflections(projectId)]);
-      setData({ project, events, reflections });
+      const [events, reflections, snapshots] = await Promise.all([getEvents(projectId), getReflections(projectId), getSnapshots(projectId)]);
+      setData({ project, events, reflections, snapshots });
     })().catch((e) => setError(String(e)));
   }, [projectId]);
   if (error) return <main className="home"><p className="error">{error}</p><Link href="/">Back to projects</Link></main>;
@@ -35,9 +35,30 @@ function fmtClock(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function PlayerInner({ project, events, reflections: initialRefs }: { project: Project; events: RecEvent[]; reflections: Reflection[] }) {
+function PlayerInner({
+  project,
+  events,
+  reflections: initialRefs,
+  snapshots,
+}: {
+  project: Project;
+  events: RecEvent[];
+  reflections: Reflection[];
+  snapshots: { seq: number; doc: Record<string, unknown> }[];
+}) {
   const schema = getDocSchema();
-  const engine = useMemo(() => new ReplayEngine(schema, events), [schema, events]);
+  const engine = useMemo(() => {
+    const e = new ReplayEngine(schema, events);
+    for (const s of snapshots) {
+      if (s.seq > events.length) continue;
+      try {
+        e.seed(s.seq, schema.nodeFromJSON(s.doc));
+      } catch {
+        /* ignore an unreadable snapshot; the engine replays instead */
+      }
+    }
+    return e;
+  }, [schema, events, snapshots]);
   const timeline = useMemo(() => buildTimeline(events), [events]);
   const stats = useMemo(() => computeStats(events), [events]);
   const readOnly = !!project.imported;
