@@ -8,7 +8,7 @@ import { buildSystemPrompt } from "@/lib/coach/prompt";
 
 export const runtime = "nodejs";
 
-const MODEL = process.env.COACH_MODEL || "claude-opus-5-5";
+const MODEL = process.env.COACH_MODEL || "claude-haiku-5-5";
 const DAILY_LIMIT = Number(process.env.COACH_DAILY_LIMIT || 60);
 // Models that support server-side refusal fallbacks.
 const FALLBACK_MODELS = new Set(["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-2", "claude-fable-5-1"]);

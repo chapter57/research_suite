@@ -46,7 +46,7 @@ npm run build
 ## The AI coach
 
 - The API key stays on the server (`src/app/api/coach/route.ts`). Students never see it.
-- `COACH_MODEL` picks the model. The default is `claude-opus-5-5`. `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper.
+- `COACH_MODEL` picks the model. The default is `claude-haiku-5-5` (a few dollars a term for one class). `claude-sonnet-5-5` and `claude-opus-5-5` are stronger and cost more.
 - `COACH_DAILY_LIMIT` caps requests per browser per day.
 - Course policy (coach on by default? which modes? block copying?) is in `src/config/course.ts`.
 - Modes and their instructions: `src/lib/coach/modes.ts`. Core rules: `src/lib/coach/prompt.ts`.
