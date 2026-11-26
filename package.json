@@ -1,6 +1,6 @@
 {
   "name": "research-suite",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "A writing studio for student research projects: process recording, reflective replay, and a toggleable AI writing coach that assists without ghostwriting.",
   "scripts": {

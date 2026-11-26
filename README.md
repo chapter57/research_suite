@@ -7,7 +7,7 @@ helps students think, read, research and revise. It does not write for them.
 The first course pack is **ENGL 102: Composition and Critical Reading**, built around the course's skill badges
 (Reading Actively, Critiquing, Analyzing, Synthesizing II, Imagining Readers, Shifting Styles II, Paragraphing II).
 
-## What's in version 0.1
+## What's in version 1.0
 
 | Feature | Status |
 |---|---|
@@ -19,10 +19,10 @@ The first course pack is **ENGL 102: Composition and Critical Reading**, built a
 | Reflections: voice or text notes pinned to moments; playback stops at them | ✅ |
 | Process stats (sessions, active time, typed vs. pasted, coach use) | ✅ |
 | AI coach: 5 modes, course-skill focus, on/off toggle, no-copy panel, daily limit | ✅ |
-| Export/import a project file (submit through a Moodle assignment) | ✅ |
+| Download: MLA paper (Word, PDF), replay video (MP4), project file for Moodle | ✅ |
 | Accounts, cloud storage, instructor dashboard, Moodle (LTI) integration | Planned |
 
-Storage in 0.1 is **in the student's browser** (IndexedDB). Students should export to back up their work, and
+Storage in 1.0 is **in the student's browser** (IndexedDB). Students should export to back up their work, and
 export to submit. An instructor opens a submitted file with **Open a shared recording…** on the home page.
 
 ## Running it
