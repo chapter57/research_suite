@@ -1,0 +1,31 @@
+{
+  "name": "research-suite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A writing studio for student research projects: process recording, reflective replay, and a toggleable AI writing coach that assists without ghostwriting.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.14.0",
+    "@tiptap/core": "3.35.0",
+    "@tiptap/extension-placeholder": "3.35.0",
+    "@tiptap/pm": "3.35.0",
+    "@tiptap/react": "3.35.0",
+    "@tiptap/starter-kit": "3.35.0",
+    "idb": "8.0.4",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "19.3.3",
+    "@types/react-dom": "^19",
+    "typescript": "5.9.3"
+  }
+}
