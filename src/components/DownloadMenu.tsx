@@ -133,7 +133,7 @@ function DownloadDialog({ projectId, beforeExport, onClose }: { projectId: strin
           <div className="choice">
             <div>
               <b>Replay video</b>
-              <div className="small muted">A video of your paper being written, with your reflections and voice notes. Takes about 2–3 minutes to make; keep this tab open.</div>
+              <div className="small muted">A video of your paper being written, with your reflections and voice notes. Usually ready in under a minute; keep this tab open while it’s made.</div>
             </div>
             <button onClick={makeVideo} disabled={!!busy || !canVideo}>{canVideo ? "Make video" : "Not supported here"}</button>
           </div>
