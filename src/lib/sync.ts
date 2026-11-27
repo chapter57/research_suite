@@ -23,9 +23,15 @@ import {
   putSnapshot,
   truncateRecording,
 } from "./store";
+import { packEvents, unpackEvents } from "./packing";
 import type { Project, RecEvent, Reflection } from "./types";
 
-const CHUNK = 1500; // events per uploaded chunk
+/**
+ * Recording uploads are compressed. Uploaded pieces never cross a multiple of
+ * BLOCK, so once a block of events is final it can be merged into one
+ * compressed chunk and the small pieces inside it deleted safely.
+ */
+const BLOCK = 1000;
 const PAGE = 100; // chunks per download request
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -76,8 +82,12 @@ async function pushOne(id: string, account: Account) {
   // Recording: resend from one before the last synced event.
   const start = Math.max(0, synced - 1);
   const events = total > start ? await getEventsFrom(id, start) : [];
-  for (let i = 0; i < events.length; i += CHUNK) {
-    check(await sb().from("event_chunks").upsert({ project_id: id, start_seq: start + i, events: events.slice(i, i + CHUNK) }));
+  for (let i = 0; i < events.length; ) {
+    const pos = start + i;
+    const end = Math.min(start + events.length, (Math.floor(pos / BLOCK) + 1) * BLOCK);
+    const piece = events.slice(i, i + (end - pos));
+    check(await sb().from("event_chunks").upsert({ project_id: id, start_seq: pos, events: await packEvents(piece) }));
+    i += piece.length;
   }
 
   // Reflections not uploaded yet (voice notes go to private storage).
@@ -105,7 +115,39 @@ async function pushOne(id: string, account: Account) {
 
   const latest = (await getProject(id)) ?? p;
   const newSynced = events.length ? start + events.length : synced;
-  await putProject({ ...latest, owner: account.id, syncedThrough: newSynced, snapPushedSeq: snapNew ? snap.seq : p.snapPushedSeq });
+  const compactedThrough = await compact(id, p.compactedThrough ?? 0, newSynced - 1);
+  await putProject({ ...latest, owner: account.id, syncedThrough: newSynced, snapPushedSeq: snapNew ? snap.seq : p.snapPushedSeq, compactedThrough });
+}
+
+/**
+ * Merge each finished block of events (all before `sealed`, which are final)
+ * into one compressed chunk, then delete the small chunks inside it.
+ * Returns how far the recording is now merged.
+ */
+async function compact(id: string, from: number, sealed: number): Promise<number> {
+  let b = from;
+  while (b + BLOCK <= sealed) {
+    const e = b + BLOCK;
+    const existing = check(
+      await sb().from("event_chunks").select("start_seq, events").eq("project_id", id).gte("start_seq", b).lt("start_seq", e),
+    ) as { start_seq: number; events: unknown }[];
+    const lengths = await Promise.all(existing.map(async (r) => ({ start: r.start_seq, n: (r.events as { n?: number })?.n ?? (await unpackEvents(r.events)).length })));
+    const atStart = lengths.find((r) => r.start === b);
+    // An older upload that runs past this block can't be replaced safely; leave the block as is.
+    if (atStart && atStart.start + atStart.n > e) {
+      b = e;
+      continue;
+    }
+    if (!(lengths.length === 1 && atStart?.n === BLOCK)) {
+      const blockEvents = (await getEventsFrom(id, b)).slice(0, BLOCK);
+      if (blockEvents.length < BLOCK) break;
+      check(await sb().from("event_chunks").upsert({ project_id: id, start_seq: b, events: await packEvents(blockEvents) }));
+      const inside = lengths.filter((r) => r.start > b && r.start + r.n <= e).map((r) => r.start);
+      if (inside.length) check(await sb().from("event_chunks").delete().eq("project_id", id).in("start_seq", inside));
+    }
+    b = e;
+  }
+  return b;
 }
 
 // ---------------- Download ----------------
@@ -125,6 +167,9 @@ export interface CloudProject {
 }
 
 export async function downloadEvents(id: string, fromSeq: number): Promise<{ start: number; events: RecEvent[] }> {
+  // Events near `fromSeq` may live in a merged block (or an older, longer
+  // upload) that starts earlier, so read from a little before.
+  fromSeq = Math.max(0, Math.floor(fromSeq / BLOCK) * BLOCK - 1500);
   const placed = new Map<number, RecEvent>();
   for (let page = 0; ; page++) {
     const rows = check(
@@ -135,9 +180,9 @@ export async function downloadEvents(id: string, fromSeq: number): Promise<{ sta
         .gte("start_seq", fromSeq)
         .order("start_seq")
         .range(page * PAGE, page * PAGE + PAGE - 1),
-    ) as { start_seq: number; events: RecEvent[] }[];
+    ) as { start_seq: number; events: unknown }[];
     // Later chunks overwrite the overlapping end of earlier ones.
-    for (const row of rows) row.events.forEach((e, i) => placed.set(row.start_seq + i, e));
+    for (const row of rows) (await unpackEvents(row.events)).forEach((e, i) => placed.set(row.start_seq + i, e));
     if (rows.length < PAGE) break;
   }
   if (!placed.size) return { start: fromSeq, events: [] };

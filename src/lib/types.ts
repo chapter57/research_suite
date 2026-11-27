@@ -76,4 +76,6 @@ export interface Project {
   syncedThrough?: number;
   /** Snapshot last uploaded to the cloud. */
   snapPushedSeq?: number;
+  /** Events already merged into compressed blocks in the cloud. */
+  compactedThrough?: number;
 }
