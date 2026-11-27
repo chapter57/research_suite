@@ -39,6 +39,12 @@ test("a genuine student launch is accepted", async () => {
   assert.deepEqual(l, { sub: "moodle-user-42", name: "Ada Lovelace", isInstructor: false, contextTitle: undefined });
 });
 
+test("with no deployment ID saved, any deployment of that tool is accepted", async () => {
+  const { keyset, token } = await platform();
+  const l = await verifyLaunch(await token({ [LTI.deploymentId]: "99" }), { ...reg, deployment_id: "" }, "n1", keyset);
+  assert.equal(l.sub, "moodle-user-42");
+});
+
 test("instructors are recognized", async () => {
   const { keyset, token } = await platform();
   const l = await verifyLaunch(await token({ [LTI.roles]: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"] }), reg, "n1", keyset);

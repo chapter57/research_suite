@@ -44,8 +44,8 @@ export default function MoodlePanel({ classId }: { classId: string }) {
     e.preventDefault();
     setError("");
     const iss = issuer.trim().replace(/\/+$/, "");
-    if (!/^https:\/\/[^\s/]+/.test(iss)) return setError("The Platform ID should be your Moodle's address, starting with https:// (for example https://moodle.yourschool.edu).");
-    if (!clientId.trim() || !deploymentId.trim()) return setError("Please paste both the Client ID and the Deployment ID from Moodle.");
+    if (!/^https:\/\/[^\s/]+$/.test(iss)) return setError("Enter just your Moodle's web address, starting with https:// (for example https://moodle.yourschool.edu), with nothing after it.");
+    if (!clientId.trim()) return setError("Please paste the Client ID from Moodle.");
     setBusy(true);
     const { error: err } = await sb()
       .from("lti_registrations")
@@ -87,7 +87,7 @@ export default function MoodlePanel({ classId }: { classId: string }) {
         <div style={{ marginTop: 8 }}>
           {regs.map((r) => (
             <div className="row class-row" key={r.id}>
-              <span>✓ Connected to <b>{r.issuer.replace(/^https:\/\//, "")}</b> <span className="small muted">(client {r.client_id}, deployment {r.deployment_id})</span></span>
+              <span>✓ Connected to <b>{r.issuer.replace(/^https:\/\//, "")}</b> <span className="small muted">(client ID {r.client_id}{r.deployment_id ? `, deployment ${r.deployment_id}` : ""})</span></span>
               <span className="spacer" />
               <button className="ghost small" onClick={() => disconnect(r)}>Disconnect</button>
             </div>
@@ -118,18 +118,22 @@ export default function MoodlePanel({ classId }: { classId: string }) {
             </tbody>
           </table>
           <p className="small muted">
-            Under <b>Privacy</b>, set <b>Share launcher&apos;s name with tool</b> to <b>Always</b> (so your roster shows names). Leave email sharing and the
-            services off. Then click <b>Save changes</b>.
+            Click <b>Show more…</b> or <b>Expand all</b> to see every section. Under <b>Privacy</b>, set <b>Share launcher&apos;s name with tool</b> to
+            <b> Always</b> (so your roster shows names). Leave email sharing and the services off. Then click <b>Save changes</b>.
+          </p>
+          <p className="small muted">
+            Back on the LTI External tools list, turn on <b>Show in activity chooser</b> for Research Suite.
           </p>
           <h4>Step 2 · Paste Moodle&apos;s details here</h4>
           <p className="small muted">
-            In the LTI External tools list, find Research Suite and click its <b>configuration details</b> icon. Copy these three values:
+            In the LTI External tools list, open Research Suite&apos;s <b>Actions</b> menu and choose <b>Edit</b>. Copy the <b>Client ID</b> (in a grey box near
+            the top) and paste it below with your Moodle&apos;s web address.
           </p>
           <form onSubmit={save} className="fields" style={{ gridTemplateColumns: "1fr" }}>
-            <label className="field"><span>Platform ID</span><input type="text" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://moodle.yourschool.edu" /></label>
+            <label className="field"><span>Your Moodle&apos;s web address (Platform ID)</span><input type="text" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://moodle.yourschool.edu" aria-label="Moodle address" /></label>
             <div className="fields">
-              <label className="field"><span>Client ID</span><input type="text" value={clientId} onChange={(e) => setClientId(e.target.value)} /></label>
-              <label className="field"><span>Deployment ID</span><input type="text" value={deploymentId} onChange={(e) => setDeploymentId(e.target.value)} /></label>
+              <label className="field"><span>Client ID</span><input type="text" value={clientId} onChange={(e) => setClientId(e.target.value)} aria-label="Client ID" /></label>
+              <label className="field"><span>Deployment ID (optional; leave blank unless an administrator gives you one)</span><input type="text" value={deploymentId} onChange={(e) => setDeploymentId(e.target.value)} aria-label="Deployment ID" /></label>
             </div>
             {error && <p className="error" style={{ margin: 0 }}>{error}</p>}
             <div className="row">

@@ -16,7 +16,7 @@ async function handle(req: NextRequest) {
   if (!iss || !loginHint) return page("Something's missing", "This link must be opened from the Research Suite activity in Moodle.");
   const regs = await findRegistrations(iss, p.get("client_id") ?? undefined);
   const dep = p.get("lti_deployment_id");
-  const reg = regs.find((r) => !dep || r.deployment_id === dep) ?? (regs.length === 1 ? regs[0] : undefined);
+  const reg = regs.find((r) => dep && r.deployment_id === dep) ?? regs.find((r) => !r.deployment_id) ?? (regs.length === 1 ? regs[0] : undefined);
   if (!reg) {
     return page(
       "This Moodle course isn't connected yet",

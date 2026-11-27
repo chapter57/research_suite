@@ -81,7 +81,8 @@ export async function verifyLaunch(idToken: string, reg: Registration, nonce: st
     throw new LaunchError(`Moodle's message couldn't be verified (${e instanceof Error ? e.message : "invalid"}).`);
   }
   if (payload.nonce !== nonce) throw new LaunchError("This launch was already used or doesn't match. Please click the link in Moodle again.");
-  if (payload[LTI.deploymentId] !== reg.deployment_id) throw new LaunchError("This launch came from a different Moodle deployment than the one connected.");
+  // The deployment ID is optional when connecting (Moodle doesn't show it to teachers).
+  if (reg.deployment_id && payload[LTI.deploymentId] !== reg.deployment_id) throw new LaunchError("This launch came from a different Moodle deployment than the one connected.");
   if (payload[LTI.messageType] !== "LtiResourceLinkRequest") throw new LaunchError("Research Suite only supports regular activity launches from Moodle.");
   if (payload[LTI.version] !== "1.3.0") throw new LaunchError("Research Suite needs LTI version 1.3.");
   if (typeof payload.sub !== "string" || !payload.sub) throw new LaunchError("Moodle didn't say who is launching.");
