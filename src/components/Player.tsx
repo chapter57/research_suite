@@ -170,7 +170,9 @@ export function PlayerInner({
     let raf = 0;
     const tick = (now: number) => {
       const p = posRef.current;
-      let np = Math.min(timeline.total, p + (now - last) * speedRef.current);
+      // Frame timestamps can be slightly earlier than when playback (re)started;
+      // never step backward, or a just-shown reflection would be hit again.
+      let np = Math.min(timeline.total, p + Math.max(0, now - last) * speedRef.current);
       last = now;
       let stopAt: Reflection | null = null;
       if (pauseRef.current) {
@@ -188,12 +190,7 @@ export function PlayerInner({
       if (stopAt) {
         setPlaying(false);
         setActiveNote(stopAt.id);
-        const url = audioUrls.get(stopAt.id);
-        if (url) {
-          const a = new Audio(url);
-          a.onended = () => setPlaying(true);
-          a.play().catch(() => {});
-        }
+        holdAt(stopAt);
         return;
       }
       if (np >= timeline.total) {
@@ -207,12 +204,66 @@ export function PlayerInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, timeline, audioUrls]);
 
+  // ---- Pausing at a reflection ----
+  // The note is shown over the paper. Text notes stay up long enough to read,
+  // voice notes until they finish; then playback continues by itself.
+  const [hold, setHold] = useState<{ note: Reflection; resumeAt: number | null; voice: boolean } | null>(null);
+  const holdAudio = useRef<HTMLAudioElement | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  function stopHoldAudio() {
+    if (holdAudio.current) {
+      holdAudio.current.onended = null;
+      holdAudio.current.pause();
+      holdAudio.current = null;
+    }
+  }
+  function holdAt(r: Reflection) {
+    stopHoldAudio();
+    const url = audioUrls.get(r.id);
+    if (url) {
+      const a = new Audio(url);
+      holdAudio.current = a;
+      a.onended = () => continuePlaying();
+      setHold({ note: r, resumeAt: null, voice: true });
+      a.play().catch(() => setHold({ note: r, resumeAt: Date.now() + 4000, voice: true }));
+    } else {
+      const readMs = Math.min(15000, Math.max(4000, 2500 + (r.text?.length ?? 0) * 50));
+      setHold({ note: r, resumeAt: Date.now() + readMs, voice: false });
+    }
+  }
+  function clearHold() {
+    stopHoldAudio();
+    setHold(null);
+  }
+  function continuePlaying() {
+    clearHold();
+    setActiveNote(null);
+    setPlaying(true);
+  }
+  function stayHere() {
+    stopHoldAudio();
+    setHold((h) => (h ? { ...h, resumeAt: null, voice: false } : h));
+  }
+  useEffect(() => {
+    if (!hold?.resumeAt) return;
+    const t = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= hold.resumeAt!) continuePlaying();
+    }, 200);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hold]);
+  useEffect(() => () => stopHoldAudio(), []);
+
   function seek(ms: number) {
+    clearHold();
     posRef.current = ms;
     setPos(ms);
     setActiveNote(null);
   }
   function togglePlay() {
+    if (hold) return continuePlaying();
     if (!playing && posRef.current >= timeline.total) seek(0);
     setActiveNote(null);
     setPlaying((v) => !v);
@@ -315,7 +366,27 @@ export function PlayerInner({
             {events.length === 0 ? (
               <p className="muted" style={{ textAlign: "center" }}>Nothing recorded yet. Write something first, then come back to replay it.</p>
             ) : (
-              <div className="paper"><div ref={mountRef} /></div>
+              <div className="paper-stage">
+                <div className="paper"><div ref={mountRef} /></div>
+                {hold && (
+                  <div className="note-overlay" role="status">
+                    <div className="note-overlay-label">{hold.voice ? "Reflection · voice note playing" : "Reflection"}</div>
+                    {hold.note.text && <div className="note-overlay-text">{hold.note.text}</div>}
+                    <div className="row" style={{ marginTop: 10 }}>
+                      <span className="small" style={{ opacity: 0.8 }}>
+                        {hold.resumeAt
+                          ? `Continuing in ${Math.max(1, Math.ceil((hold.resumeAt - now) / 1000))}s`
+                          : hold.voice
+                            ? "Continues when the voice note ends"
+                            : "Paused here"}
+                      </span>
+                      <span className="spacer" />
+                      {(hold.resumeAt || hold.voice) && <button className="ghost on-dark" onClick={stayHere}>Stay here</button>}
+                      <button className="on-dark" onClick={continuePlaying}>Continue ▶</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           {events.length > 0 && (
