@@ -143,7 +143,10 @@ export async function joinClass(code: string): Promise<{ class_id: string; class
   const res = await sb().rpc("join_class", { join_code: code.trim() });
   if (res.error) throw new Error(res.error.message.replace(/^.*?:\s*/, "") || "Couldn't join that class.");
   const row = (res.data as { class_id: string; class_name: string }[])[0];
-  return row;
+  // Show the full course name ("English 102: … · Section") now that we're enrolled and can read it.
+  const cls = await sb().from("classes").select("name, kit").eq("id", row.class_id);
+  const c = (cls.data as { name: string; kit: ClassKit | null }[] | null)?.[0];
+  return c ? { class_id: row.class_id, class_name: classDisplayName(c.name, c.kit) } : row;
 }
 
 export async function leaveClass(account: Account, classId: string) {

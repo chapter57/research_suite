@@ -3,8 +3,8 @@ import Link from "next/link";
 import { useState } from "react";
 import AuthForm, { type AuthMode } from "./AuthForm";
 
-export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
-  const [mode, setMode] = useState<AuthMode | null>(null);
+export default function Landing({ onSignedIn, joinCode }: { onSignedIn: () => void; joinCode?: string }) {
+  const [mode, setMode] = useState<AuthMode | null>(joinCode ? "student" : null);
   return (
     <main className="landing">
       <section className="hero">
@@ -15,6 +15,12 @@ export default function Landing({ onSignedIn }: { onSignedIn: () => void }) {
         </p>
       </section>
 
+      {joinCode && (
+        <p className="banner-inline center" style={{ maxWidth: 560, margin: "0 auto 16px" }}>
+          You&apos;ve been invited to join a class (code <b>{joinCode}</b>). Create a student account, or sign in if you already have one, and
+          you&apos;ll be added automatically.
+        </p>
+      )}
       {mode ? (
         <div className="auth-wrap">
           <AuthForm mode={mode} setMode={setMode} onDone={onSignedIn} />

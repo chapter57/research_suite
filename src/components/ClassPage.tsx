@@ -17,6 +17,7 @@ export default function ClassPage({ classId }: { classId: string }) {
   const [subs, setSubs] = useState<Submission[]>([]);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copiedKind, setCopiedKind] = useState("");
   const [shelf, setShelf] = useState<KitRow[] | null>(null);
   const [swapTo, setSwapTo] = useState("");
   const [viewing, setViewing] = useState(false);
@@ -45,6 +46,15 @@ export default function ClassPage({ classId }: { classId: string }) {
 
   const nameOf = (id: string) => people.find((p) => p.student === id)?.student_name || "(student left the class)";
   const countFor = (id: string) => subs.filter((s) => s.student === id).length;
+
+  const joinLink = typeof window !== "undefined" ? `${window.location.origin}/join/${cls.code}` : `/join/${cls.code}`;
+  const moodleText = `Join our class in Research Suite, where you'll write and reflect on your projects: ${joinLink}\nCreate a student account (or sign in), and you'll be added to the class automatically. If you're asked for a join code, it's ${cls.code}.`;
+  const [copiedWhat, setCopiedWhat] = [copiedKind, setCopiedKind];
+  async function copyText(text: string, kind: string) {
+    await navigator.clipboard?.writeText(text).catch(() => {});
+    setCopiedWhat(kind);
+    setTimeout(() => setCopiedWhat(""), 1500);
+  }
 
   async function copy() {
     await navigator.clipboard?.writeText(cls!.code).catch(() => {});
@@ -129,8 +139,15 @@ export default function ClassPage({ classId }: { classId: string }) {
             <button onClick={copy}>{copied ? "Copied" : "Copy"}</button>
           </div>
           <p className="small muted">
-            Give students this code (for example, in a Moodle announcement). They sign in at researchsuites.vercel.app, type the code under
-            &quot;Your classes&quot;, and click <b>Join class</b>.
+            Students can type this code under &quot;My classes&quot;, or simply click the class&apos;s join link:
+          </p>
+          <div className="row">
+            <code className="join-link">{joinLink}</code>
+            <button onClick={() => copyText(joinLink, "link")}>{copiedWhat === "link" ? "Copied" : "Copy link"}</button>
+            <button onClick={() => copyText(moodleText, "moodle")}>{copiedWhat === "moodle" ? "Copied" : "Copy text for Moodle"}</button>
+          </div>
+          <p className="small muted" style={{ marginBottom: 0 }}>
+            In Moodle, add the link with the <b>URL</b> activity, or paste the text into an announcement.
           </p>
         </section>
 

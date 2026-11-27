@@ -121,7 +121,7 @@ export default function TeacherClasses({ account }: { account: Account }) {
           </label>
         </div>
         <div className="row">
-          <button type="submit" className="primary" disabled={busy || !newName.trim()}>Create class</button>
+          <button type="submit" className="primary" disabled={busy || !newName.trim() || rows === null || !kitChoice}>Create class</button>
           <span className="small muted">You can swap the kit until the first student joins. After that it&apos;s locked.</span>
         </div>
       </form>
