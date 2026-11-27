@@ -18,3 +18,9 @@
 - Classes (`supabase/classes.sql`, `src/lib/classes.ts`): only accounts in `public.instructors` can create
   classes (the founder adds rows by SQL); students join by code via the `join_class` function; instructors
   can read a project only after it is turned in to their class, up to the turned-in `event_count`.
+- Course kits (`supabase/kits.sql`, `src/lib/coach/kits.ts`, `src/lib/kitsClient.ts`): a kit is course-level
+  (catalog title, ethos, objectives, citation style, guidance), never per-assignment. A class stores a frozen
+  copy (`classes.kit`) that can be swapped only until the first student joins (database trigger). The coach
+  resolves the kit server-side (`src/lib/coach/kitServer.ts`): class kit, a teacher's own kit, a test kit
+  (teachers only), else general writing. Core no-ghostwriting rules always come before kit text.
+- Local testing of the coach route against Supabase needs `NODE_USE_ENV_PROXY=1` (the sandbox proxies HTTPS).

@@ -74,8 +74,9 @@ export default function NewProjectDialog({
             </select>
           </label>
         )}
+        {account && (role === "teacher" ? kits === null : classes === null) && <p className="small muted" style={{ margin: 0 }}>Loading your {role === "teacher" ? "course kits" : "classes"}…</p>}
         <div className="row" style={{ marginTop: 6 }}>
-          <button type="submit" className="primary">Create project</button>
+          <button type="submit" className="primary" disabled={!!account && (role === "teacher" ? kits === null : classes === null)}>Create project</button>
           <button type="button" className="ghost" onClick={onCancel}>Cancel</button>
         </div>
       </form>

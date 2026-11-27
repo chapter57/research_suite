@@ -52,6 +52,7 @@ export default function TeacherClasses({ account }: { account: Account }) {
       } else row = kits.find((k) => `kit:${k.id}` === kitChoice);
       if (!row) throw new Error("Choose a course kit for this class.");
       const c = await createClass(newName, frozenCopy(row));
+      setRows((r) => [...(r ?? []), { ...c, students: 0, turnedIn: 0 }]);
       setNewName("");
       setNote(`Created "${classDisplayName(c.name, c.kit)}". Give students the join code ${c.code}.`);
       await load();

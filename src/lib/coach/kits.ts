@@ -129,7 +129,7 @@ export const english102: KitContent = {
 
 export const literaryLenses: KitContent = {
   subject: "English",
-  number: "",
+  number: "300",
   title: "Literary Theory and Criticism",
   level: "upper-level undergraduate",
   description:
