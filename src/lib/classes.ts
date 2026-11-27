@@ -66,6 +66,8 @@ export async function roster(classId: string): Promise<Enrollment[]> {
 }
 
 export async function removeStudent(classId: string, student: string) {
+  // Their turned-in work leaves the class with them.
+  check(await sb().from("submissions").delete().eq("class_id", classId).eq("student", student));
   check(await sb().from("enrollments").delete().eq("class_id", classId).eq("student", student));
 }
 
@@ -139,6 +141,8 @@ export async function joinClass(code: string): Promise<{ class_id: string; class
 }
 
 export async function leaveClass(account: Account, classId: string) {
+  // Work turned in to this class is no longer shared once you leave.
+  check(await sb().from("submissions").delete().eq("class_id", classId).eq("student", account.id));
   check(await sb().from("enrollments").delete().eq("class_id", classId).eq("student", account.id));
 }
 

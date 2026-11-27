@@ -15,3 +15,6 @@
 - Sync design (`src/lib/sync.ts`): the browser copy is the working copy; events upload as overlapping chunks
   (the last event is always re-sent). Test accounts created while testing should be listed for the founder to
   delete (Supabase: Authentication -> Users).
+- Classes (`supabase/classes.sql`, `src/lib/classes.ts`): only accounts in `public.instructors` can create
+  classes (the founder adds rows by SQL); students join by code via the `join_class` function; instructors
+  can read a project only after it is turned in to their class, up to the turned-in `event_count`.
