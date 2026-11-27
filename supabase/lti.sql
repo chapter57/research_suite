@@ -42,3 +42,8 @@ create table if not exists public.lti_users (
 );
 alter table public.lti_users enable row level security;
 revoke all on public.lti_users from anon, authenticated;
+
+-- The server (secret key) does the Moodle launch work. In projects where new tables
+-- aren't exposed automatically, it needs explicit permission too.
+grant select, insert, update, delete on public.lti_registrations, public.lti_users, public.enrollments to service_role;
+grant select on public.classes to service_role;
