@@ -33,13 +33,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const launch = await verifyLaunch(idToken, reg, saved.nonce);
+    const userId = await linkedUser(reg.issuer, launch.sub);
+
+    // The class's own teacher always goes to the class page, even while previewing
+    // the Moodle course as a student ("Switch role to Student").
+    if (userId && userId === reg.teacher) {
+      const s = await sessionFor(await emailOf(userId));
+      return done(NextResponse.redirect(`${base}/lti/done#${new URLSearchParams({ ...s, next: `/class/${reg.class_id}` })}`, 303));
+    }
 
     if (launch.isInstructor) {
-      const userId = await linkedUser(reg.issuer, launch.sub);
-      if (userId === reg.teacher) {
-        const s = await sessionFor(await emailOf(userId));
-        return done(NextResponse.redirect(`${base}/lti/done#${new URLSearchParams({ ...s, next: `/class/${reg.class_id}` })}`, 303));
-      }
       if (userId) {
         return done(page("This class belongs to another teacher", "Your Moodle account is connected to a different Research Suite teacher account than the one that owns this class.", 403));
       }
