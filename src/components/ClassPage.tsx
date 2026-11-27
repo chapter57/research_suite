@@ -6,6 +6,7 @@ import { classDisplayName, classSubmissions, getClass, removeStudent, roster, ty
 import { catalogTitle, plural } from "@/lib/coach/kits";
 import { myKits, plugKit, type KitRow } from "@/lib/kitsClient";
 import KitPreviewModal from "./KitPreview";
+import MoodlePanel from "./MoodlePanel";
 import { sb, useSession } from "@/lib/cloud";
 import SiteHeader from "./SiteHeader";
 
@@ -150,6 +151,8 @@ export default function ClassPage({ classId }: { classId: string }) {
             In Moodle, add the link with the <b>URL</b> activity, or paste the text into an announcement.
           </p>
         </section>
+
+        <MoodlePanel classId={classId} />
 
         <section className="card" style={{ marginTop: 12 }}>
           <h3 style={{ marginTop: 0 }}>Turned-in work ({subs.length})</h3>

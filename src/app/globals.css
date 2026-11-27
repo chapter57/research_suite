@@ -275,3 +275,5 @@ button.linklike { background: none; border: none; padding: 0; color: var(--accen
 .starter-card { cursor: default; }
 .starter-card:hover { transform: none; }
 .join-link { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; overflow-wrap: anywhere; }
+.moodle-steps { margin-top: 10px; display: grid; gap: 6px; }
+.moodle-steps h4 { margin: 10px 0 0; font-size: 14px; }
