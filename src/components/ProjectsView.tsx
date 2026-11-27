@@ -7,6 +7,7 @@ import type { Account, Role } from "@/lib/cloud";
 import { createProject, deleteProject, importProject, listProjects } from "@/lib/store";
 import { deleteFromCloud, syncAll, visibleTo } from "@/lib/sync";
 import type { Project } from "@/lib/types";
+import NewProjectDialog, { type NewProjectChoice } from "./NewProjectDialog";
 
 export default function ProjectsView({ account, role, heading }: { account: Account | null; role?: Role; heading: string }) {
   const router = useRouter();
@@ -51,10 +52,9 @@ export default function ProjectsView({ account, role, heading }: { account: Acco
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account?.id, role]);
 
-  async function onNew() {
-    const title = prompt("Name your project", "Untitled project");
-    if (title === null) return;
-    const p = await createProject(title.trim() || "Untitled project", account?.id);
+  const [creating, setCreating] = useState(false);
+  async function create(c: NewProjectChoice) {
+    const p = await createProject(c.title, account?.id, { classId: c.classId, kitId: c.kitId });
     router.push(`/write/${p.id}`);
   }
 
@@ -96,8 +96,9 @@ export default function ProjectsView({ account, role, heading }: { account: Acco
             <input ref={fileRef} type="file" accept=".rsproj,.json,application/json,application/gzip" hidden onChange={onImport} />
           </>
         )}
-        <button className="primary" onClick={onNew}>New project</button>
+        <button className="primary" onClick={() => setCreating(true)}>New project</button>
       </div>
+      {creating && <NewProjectDialog account={account} role={role} onCancel={() => setCreating(false)} onCreate={create} />}
       {!account && (
         <p className="banner-inline">
           You&apos;re not signed in, so projects are saved only in this browser on this computer. <Link href="/">Create an account or sign in</Link> to keep them in your account.

@@ -48,9 +48,20 @@ export async function putProject(p: Project) {
   await (await db()).put("projects", p);
 }
 
-export async function createProject(title: string, owner?: string): Promise<Project> {
+export async function createProject(title: string, owner?: string, link: { classId?: string; kitId?: string } = {}): Promise<Project> {
   const now = Date.now();
-  const p: Project = { id: newId(), title, createdAt: now, updatedAt: now, doc: null, wordCount: 0, eventCount: 0, ...(owner ? { owner } : {}) };
+  const p: Project = {
+    id: newId(),
+    title,
+    createdAt: now,
+    updatedAt: now,
+    doc: null,
+    wordCount: 0,
+    eventCount: 0,
+    ...(owner ? { owner } : {}),
+    ...(link.classId ? { classId: link.classId } : {}),
+    ...(link.kitId ? { kitId: link.kitId } : {}),
+  };
   await putProject(p);
   return p;
 }

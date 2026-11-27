@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { course } from "@/config/course";
 import { modeById, type ModeId } from "@/lib/coach/modes";
-import { packs } from "@/lib/coach/packs";
+import { KitAccessError, resolveKit } from "@/lib/coach/kitServer";
 import { buildSystemPrompt } from "@/lib/coach/prompt";
 
 export const runtime = "nodejs";
@@ -29,7 +29,14 @@ function overLimit(clientId: string): boolean {
 
 interface CoachRequest {
   mode: ModeId;
-  skillId?: string;
+  /** Name of the course objective the student chose to focus on. */
+  focus?: string;
+  /** The class the project is for (its locked kit is used). */
+  classId?: string;
+  /** A teacher's own kit, for a teacher's own project. */
+  kitId?: string;
+  /** A kit being edited, for "Test the coach" (teachers only). */
+  kit?: unknown;
   question: string;
   excerpt?: string;
   history?: { role: "user" | "assistant"; content: string }[];
@@ -66,9 +73,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `You've reached today's limit of ${DAILY_LIMIT} coach requests. Try again tomorrow.` }, { status: 429 });
   }
 
-  const pack = packs[course.packId];
-  const skill = pack.skills.find((s) => s.id === body.skillId);
-  const system = buildSystemPrompt(pack, mode, skill);
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || null;
+  let kit;
+  try {
+    kit = await resolveKit({ token, classId: body.classId, kitId: body.kitId, kit: body.kit });
+  } catch (e) {
+    if (e instanceof KitAccessError) return NextResponse.json({ error: e.message }, { status: 403 });
+    console.error("Kit lookup failed", e);
+    return NextResponse.json({ error: "Couldn't load the course kit. Try again shortly." }, { status: 502 });
+  }
+  const focus = kit.objectives.find((o) => o.name === body.focus);
+  const system = buildSystemPrompt(kit, mode, focus);
 
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history || [])
     .slice(-6)

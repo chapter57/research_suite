@@ -5,6 +5,7 @@
 import { sb, type Account } from "./cloud";
 import { getProject } from "./store";
 import { check, downloadEvents, fetchReflections, pushProject, type CloudProject } from "./sync";
+import { catalogTitle, type ClassKit } from "./coach/kits";
 import type { Project, RecEvent, Reflection } from "./types";
 
 export interface ClassInfo {
@@ -12,6 +13,7 @@ export interface ClassInfo {
   name: string;
   code: string;
   created_at: string;
+  kit?: ClassKit | null;
 }
 export interface Enrollment {
   class_id: string;
@@ -35,10 +37,15 @@ export async function isInstructor(account: Account): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** "English 102: Composition and Critical Reading · Maymester 2027" */
+export function classDisplayName(section: string, kit: ClassKit | null | undefined): string {
+  return kit ? `${catalogTitle(kit)} · ${section}` : section;
+}
+
 // ---------- Instructor ----------
 
 export async function classesITeach(account: Account): Promise<ClassInfo[]> {
-  return check(await sb().from("classes").select("id, name, code, created_at").eq("teacher", account.id).order("created_at")) as ClassInfo[];
+  return check(await sb().from("classes").select("id, name, code, created_at, kit").eq("teacher", account.id).order("created_at")) as ClassInfo[];
 }
 
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I
@@ -47,9 +54,9 @@ function newCode() {
   return Array.from(bytes, (b) => CODE_LETTERS[b % CODE_LETTERS.length]).join("");
 }
 
-export async function createClass(name: string): Promise<ClassInfo> {
+export async function createClass(name: string, kit: ClassKit | null): Promise<ClassInfo> {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const res = await sb().from("classes").insert({ name: name.trim(), code: newCode() }).select("id, name, code, created_at").single();
+    const res = await sb().from("classes").insert({ name: name.trim(), code: newCode(), kit }).select("id, name, code, created_at, kit").single();
     if (!res.error) return res.data as ClassInfo;
     if (res.error.code !== "23505") throw new Error(res.error.message); // 23505 = code already used
   }
@@ -57,7 +64,7 @@ export async function createClass(name: string): Promise<ClassInfo> {
 }
 
 export async function getClass(id: string): Promise<ClassInfo | null> {
-  const rows = check(await sb().from("classes").select("id, name, code, created_at").eq("id", id)) as ClassInfo[];
+  const rows = check(await sb().from("classes").select("id, name, code, created_at, kit").eq("id", id)) as ClassInfo[];
   return rows[0] ?? null;
 }
 
@@ -121,16 +128,15 @@ export interface MyClass {
 }
 
 export async function myClasses(account: Account): Promise<MyClass[]> {
-  const rows = check(await sb().from("enrollments").select("class_id, joined_at, classes(name)").eq("student", account.id)) as unknown as {
+  const rows = check(await sb().from("enrollments").select("class_id, joined_at, classes(name, kit)").eq("student", account.id)) as unknown as {
     class_id: string;
     joined_at: string;
-    classes: { name: string } | { name: string }[] | null;
+    classes: { name: string; kit: ClassKit | null } | { name: string; kit: ClassKit | null }[] | null;
   }[];
-  return rows.map((r) => ({
-    class_id: r.class_id,
-    joined_at: r.joined_at,
-    name: (Array.isArray(r.classes) ? r.classes[0]?.name : r.classes?.name) ?? "Class",
-  }));
+  return rows.map((r) => {
+    const c = Array.isArray(r.classes) ? r.classes[0] : r.classes;
+    return { class_id: r.class_id, joined_at: r.joined_at, name: classDisplayName(c?.name ?? "Class", c?.kit ?? null) };
+  });
 }
 
 export async function joinClass(code: string): Promise<{ class_id: string; class_name: string }> {

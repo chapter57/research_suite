@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { packs } from "@/lib/coach/packs";
 import { course } from "@/config/course";
 import { downloadBlob, safeFilename } from "@/lib/download";
 import { buildPaper, mlaDate, type MlaInfo } from "@/lib/paperModel";
@@ -18,7 +17,7 @@ export default function DownloadMenu({ projectId, beforeExport }: { projectId: s
 }
 
 function DownloadDialog({ projectId, beforeExport, onClose }: { projectId: string; beforeExport?: () => Promise<void>; onClose: () => void }) {
-  const [info, setInfo] = useState<MlaInfo>({ name: "", instructor: "", course: packs[course.packId]?.course ?? "", date: mlaDate() });
+  const [info, setInfo] = useState<MlaInfo>({ name: "", instructor: "", course: "", date: mlaDate() });
   const [useMla, setUseMla] = useState(true);
   const [readOnly, setReadOnly] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);

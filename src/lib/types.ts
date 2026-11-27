@@ -70,6 +70,10 @@ export interface Project {
   author?: string;
   /** Heading details for the MLA-formatted paper. */
   mla?: { name: string; instructor: string; course: string; date: string };
+  /** The class this project is written for (the coach uses its course kit). */
+  classId?: string;
+  /** For a teacher's own project: the kit the coach uses. */
+  kitId?: string;
   /** Cloud account that owns this project (absent: this computer only). */
   owner?: string;
   /** How many recording events the cloud has. */

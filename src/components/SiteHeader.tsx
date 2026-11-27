@@ -6,7 +6,7 @@ import { useState } from "react";
 import { signOutOnly, type Account, type Role } from "@/lib/cloud";
 import { allSynced, forgetLocal, syncAll } from "@/lib/sync";
 
-export type Section = "teaching" | "projects" | "home";
+export type Section = "teaching" | "kits" | "projects" | "home";
 
 export default function SiteHeader({ account, role, active }: { account: Account | null; role?: Role; active: Section }) {
   const router = useRouter();
@@ -39,6 +39,7 @@ export default function SiteHeader({ account, role, active }: { account: Account
       {account && role === "teacher" && (
         <nav className="tabs" aria-label="Sections">
           <Link href="/" className={active === "teaching" ? "tab on" : "tab"}>Teaching</Link>
+          <Link href="/kits" className={active === "kits" ? "tab on" : "tab"}>Course kits</Link>
           <Link href="/projects" className={active === "projects" ? "tab on" : "tab"}>My projects</Link>
         </nav>
       )}

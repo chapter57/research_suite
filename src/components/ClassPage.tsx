@@ -2,7 +2,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { classSubmissions, getClass, removeStudent, roster, type ClassInfo, type Enrollment, type Submission } from "@/lib/classes";
+import { classDisplayName, classSubmissions, getClass, removeStudent, roster, type ClassInfo, type Enrollment, type Submission } from "@/lib/classes";
+import { catalogTitle } from "@/lib/coach/kits";
+import { myKits, plugKit, type KitRow } from "@/lib/kitsClient";
 import { sb, useSession } from "@/lib/cloud";
 import SiteHeader from "./SiteHeader";
 
@@ -14,6 +16,8 @@ export default function ClassPage({ classId }: { classId: string }) {
   const [subs, setSubs] = useState<Submission[]>([]);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shelf, setShelf] = useState<KitRow[] | null>(null);
+  const [swapTo, setSwapTo] = useState("");
 
   async function load() {
     try {
@@ -71,10 +75,50 @@ export default function ClassPage({ classId }: { classId: string }) {
           <Link href="/" className="small">← All classes</Link>
         </div>
         <div className="row section-head">
-          <h2>{cls.name}</h2>
+          <h2>{classDisplayName(cls.name, cls.kit)}</h2>
           <span className="spacer" />
           <button onClick={load}>Refresh</button>
         </div>
+        <section className="card" style={{ marginBottom: 12 }}>
+          <h3 style={{ marginTop: 0 }}>Course kit {people.length > 0 ? "🔒" : ""}</h3>
+          {cls.kit ? (
+            <p style={{ margin: 0 }}>
+              <b>{catalogTitle(cls.kit)}</b> <span className="muted small">version {cls.kit.version} · {cls.kit.objectives.length} {(cls.kit.objectiveLabel || "objective").toLowerCase()}s</span>
+            </p>
+          ) : (
+            <p className="small muted" style={{ margin: 0 }}>No course kit. The coach uses general academic writing guidance.</p>
+          )}
+          {people.length > 0 ? (
+            <p className="small muted" style={{ marginBottom: 0 }}>Locked: students have joined, so this class keeps this kit for good. Edits to the kit on your shelf apply to classes you create later.</p>
+          ) : shelf === null ? (
+            <p style={{ marginBottom: 0 }}><button className="small" onClick={() => myKits(account!).then(setShelf)}>Swap kit</button> <span className="small muted">You can swap until the first student joins.</span></p>
+          ) : (
+            <div className="row" style={{ marginTop: 8 }}>
+              <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} aria-label="Kit to plug in">
+                <option value="">Choose a kit from your shelf…</option>
+                {shelf.map((k) => <option key={k.id} value={k.id}>{catalogTitle(k.content)} (version {k.version})</option>)}
+              </select>
+              <button
+                className="primary"
+                disabled={!swapTo}
+                onClick={async () => {
+                  try {
+                    await plugKit(classId, shelf.find((k) => k.id === swapTo)!);
+                    setShelf(null);
+                    setSwapTo("");
+                    await load();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : String(e));
+                  }
+                }}
+              >
+                Plug in
+              </button>
+              <button className="ghost small" onClick={() => setShelf(null)}>Cancel</button>
+            </div>
+          )}
+        </section>
+
         <section className="card">
           <h3 style={{ marginTop: 0 }}>Join code</h3>
           <div className="row">

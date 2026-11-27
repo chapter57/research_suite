@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { course } from "@/config/course";
 import { modes, type ModeId } from "@/lib/coach/modes";
-import { packs } from "@/lib/coach/packs";
+import { catalogTitle, generalWriting, type KitContent } from "@/lib/coach/kits";
+import { modeLabel } from "@/lib/coach/prompt";
+import { accessToken, kitForProject } from "@/lib/kitsClient";
 import type { AiEvent } from "@/lib/types";
 
 type Scope = "selection" | "paragraph" | "draft" | "none";
@@ -24,19 +26,32 @@ function clientId(): string {
   }
 }
 
-const pack = packs[course.packId];
 
 export default function CoachPanel({
   getExcerpt,
   onExchange,
+  project,
+  testKit,
 }: {
-  getExcerpt: (scope: "selection" | "paragraph" | "draft") => string;
-  onExchange: (e: Omit<AiEvent, "type" | "t">) => void;
+  /** Writing screen: pulls text from the draft. Absent in "Test the coach". */
+  getExcerpt?: (scope: "selection" | "paragraph" | "draft") => string;
+  onExchange?: (e: Omit<AiEvent, "type" | "t">) => void;
+  /** Which class or kit the project is for. */
+  project?: { classId?: string; kitId?: string };
+  /** Kit editor: test this kit as it stands (teachers only). */
+  testKit?: KitContent;
 }) {
   const available = modes.filter((m) => course.allowedModes.includes(m.id));
   const [mode, setMode] = useState<ModeId>(available[0]?.id ?? "socratic");
-  const [skillId, setSkillId] = useState("");
-  const [scope, setScope] = useState<Scope>("paragraph");
+  const [focus, setFocus] = useState("");
+  const [scope, setScope] = useState<Scope>(getExcerpt ? "paragraph" : "none");
+  const [sample, setSample] = useState("");
+  const [loadedKit, setLoadedKit] = useState<KitContent>(generalWriting);
+  const kit = testKit ?? loadedKit;
+  useEffect(() => {
+    if (!testKit) kitForProject(project ?? {}).then(setLoadedKit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.classId, project?.kitId, !!testKit]);
   const [question, setQuestion] = useState("");
   const [thread, setThread] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
@@ -51,7 +66,7 @@ export default function CoachPanel({
 
   async function ask() {
     setError("");
-    const excerpt = scope === "none" ? "" : getExcerpt(scope);
+    const excerpt = getExcerpt ? (scope === "none" ? "" : getExcerpt(scope)) : sample.trim();
     if (scope === "selection" && !excerpt) {
       setError("Select some text in your draft first, or choose a different option.");
       return;
@@ -68,8 +83,20 @@ export default function CoachPanel({
     try {
       const res = await fetch("/api/coach", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-client-id": clientId() },
-        body: JSON.stringify({ mode, skillId: skillId || undefined, question: q, excerpt, history: thread }),
+        headers: await (async () => {
+          const h: Record<string, string> = { "content-type": "application/json", "x-client-id": clientId() };
+          const t = await accessToken();
+          if (t) h.authorization = `Bearer ${t}`;
+          return h;
+        })(),
+        body: JSON.stringify({
+          mode,
+          focus: focus || undefined,
+          question: q,
+          excerpt,
+          history: thread,
+          ...(testKit ? { kit: testKit } : { classId: project?.classId, kitId: project?.kitId }),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.answer) {
@@ -79,7 +106,7 @@ export default function CoachPanel({
         return;
       }
       setThread((t) => [...t, { role: "assistant", content: data.answer }]);
-      onExchange({ mode, badge: skillId || undefined, question: excerpt ? `${shown}\n\n[Draft excerpt, ${excerpt.length} characters]` : shown, answer: data.answer });
+      onExchange?.({ mode, badge: focus || undefined, question: excerpt ? `${shown}\n\n[Draft excerpt, ${excerpt.length} characters]` : shown, answer: data.answer });
     } catch {
       setError("Couldn't reach the coach. Check your connection.");
       setThread((t) => t.slice(0, -1));
@@ -95,20 +122,21 @@ export default function CoachPanel({
     <aside className="coach" aria-label="AI writing coach">
       <header>
         <h2>Writing coach</h2>
+        <p className="small muted" style={{ margin: "-4px 0 8px" }}>{testKit ? "Testing: " : "Coaching for "}{catalogTitle(kit)}</p>
         <div className="modes" role="tablist">
           {available.map((m) => (
             <button key={m.id} className={m.id === mode ? "on" : ""} onClick={() => setMode(m.id)} title={m.blurb}>
-              {m.label}
+              {modeLabel(m, kit.objectiveLabel)}
             </button>
           ))}
         </div>
         {current && <p className="small muted" style={{ margin: "8px 0 0" }}>{current.blurb}</p>}
         <div className="row small" style={{ marginTop: 8 }}>
-          <label htmlFor="skill">Course skill</label>
-          <select id="skill" value={skillId} onChange={(e) => setSkillId(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
+          <label htmlFor="skill">{kit.objectiveLabel || "Objective"}</label>
+          <select id="skill" value={focus} onChange={(e) => setFocus(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
             <option value="">Any / not sure</option>
-            {pack.skills.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+            {kit.objectives.filter((o) => o.name.trim()).map((o) => (
+              <option key={o.name} value={o.name}>{o.name}</option>
             ))}
           </select>
         </div>
@@ -128,15 +156,19 @@ export default function CoachPanel({
       </div>
 
       <footer>
-        <div className="row small">
-          <label htmlFor="scope">Include</label>
-          <select id="scope" value={scope} onChange={(e) => setScope(e.target.value as Scope)}>
-            <option value="paragraph">the paragraph I&apos;m in</option>
-            <option value="selection">my selected text</option>
-            <option value="draft">my whole draft</option>
-            <option value="none">nothing from my draft</option>
-          </select>
-        </div>
+        {getExcerpt ? (
+          <div className="row small">
+            <label htmlFor="scope">Include</label>
+            <select id="scope" value={scope} onChange={(e) => setScope(e.target.value as Scope)}>
+              <option value="paragraph">the paragraph I&apos;m in</option>
+              <option value="selection">my selected text</option>
+              <option value="draft">my whole draft</option>
+              <option value="none">nothing from my draft</option>
+            </select>
+          </div>
+        ) : (
+          <textarea rows={3} placeholder="Optional: paste a sample of student writing for the coach to respond to" value={sample} onChange={(e) => setSample(e.target.value)} />
+        )}
         <textarea
           rows={3}
           placeholder="Ask the coach… (e.g. “Is my claim arguable?”)"

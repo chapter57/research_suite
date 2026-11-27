@@ -74,6 +74,8 @@ async function pushOne(id: string, account: Account) {
         event_count: Math.max(total, synced),
         author: p.author ?? null,
         mla: p.mla ?? null,
+        class_id: p.classId ?? null,
+        kit_id: p.kitId ?? null,
         updated_at: new Date(p.updatedAt).toISOString(),
         ...(snapNew ? { snapshot_seq: snap.seq, snapshot_doc: snap.doc } : {}),
       }),
@@ -162,6 +164,8 @@ export interface CloudProject {
   mla: Project["mla"] | null;
   snapshot_seq: number | null;
   snapshot_doc: Record<string, unknown> | null;
+  class_id?: string | null;
+  kit_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -248,6 +252,8 @@ function fromCloud(c: CloudProject, account: Account, local?: Project): Project 
     eventCount: c.event_count,
     author: c.author ?? undefined,
     mla: c.mla ?? undefined,
+    classId: c.class_id ?? undefined,
+    kitId: c.kit_id ?? undefined,
     owner: account.id,
     syncedThrough: c.event_count,
     snapPushedSeq: c.snapshot_seq ?? undefined,

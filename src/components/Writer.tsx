@@ -359,7 +359,7 @@ function WriterInner({
             <EditorContent editor={editor} />
           </div>
         </div>
-        {coachOn && <CoachPanel getExcerpt={getExcerpt} onExchange={logExchange} />}
+        {coachOn && <CoachPanel getExcerpt={getExcerpt} onExchange={logExchange} project={{ classId: initial.classId, kitId: initial.kitId }} />}
       </div>
     </>
   );

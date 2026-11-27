@@ -3,7 +3,6 @@
 import type { ModeId } from "@/lib/coach/modes";
 
 export const course = {
-  packId: "engl102",
   /** Show the AI coach at all. */
   aiAvailable: true,
   /** Is the coach switched on when a student opens a project? */

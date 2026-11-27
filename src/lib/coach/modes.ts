@@ -27,9 +27,9 @@ export const modes: Mode[] = [
   {
     id: "skill",
     label: "Explain a skill",
-    blurb: "Learn the course skill (badge) and check your draft against it.",
+    blurb: "Learn one of the course's objectives and check your draft against it.",
     instructions:
-      "Teach the selected course skill. Briefly explain the concept and why it matters for this kind of writing, then give the student a short self-check (two to four questions or criteria) they can apply to their own draft. If an excerpt is included, point to where in it the student could apply the skill, without doing the work for them. If you illustrate a technique, use a made-up topic unrelated to the student's paper, in one sentence at most.",
+      "Teach the selected course objective (if none is selected, ask which one the student wants to work on). Briefly explain the concept and why it matters for this kind of writing, then give the student a short self-check (two to four questions or criteria) they can apply to their own draft. If an excerpt is included, point to where in it the student could apply it, without doing the work for them. If you illustrate a technique, use a made-up topic unrelated to the student's paper, in one sentence at most.",
   },
   {
     id: "research",
