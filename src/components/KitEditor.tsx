@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { catalogTitle, kitProblems, type KitContent, type Objective } from "@/lib/coach/kits";
+import { catalogTitle, kitProblems, plural, type KitContent, type Objective } from "@/lib/coach/kits";
 import { deleteKit, getKit, saveKit, type KitRow } from "@/lib/kitsClient";
 import CoachPanel from "./CoachPanel";
 
@@ -119,7 +119,7 @@ export default function KitEditor({ kitId }: { kitId: string }) {
 
         <section className="card kit-section">
           <div className="row">
-            <h3 style={{ margin: 0 }}>{label}s</h3>
+            <h3 style={{ margin: 0 }}>{plural(label)}</h3>
             <span className="spacer" />
             <label className="field" style={{ maxWidth: 220 }}>
               <span>What are they called? (singular)</span>

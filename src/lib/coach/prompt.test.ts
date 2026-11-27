@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { catalogTitle, cleanKit, english102, literaryLenses } from "./kits.ts";
+import { catalogTitle, cleanKit, english102, literaryLenses, plural } from "./kits.ts";
 import { modes } from "./modes.ts";
 import { buildSystemPrompt, modeLabel } from "./prompt.ts";
 
@@ -23,4 +23,8 @@ test("catalog titles and cleaning", () => {
   assert.equal(k.title.length, 120);
   assert.deepEqual(k.objectives[0].questions, ["q"]);
   assert.equal(k.objectiveLabel, "Objective");
+});
+
+test("plurals of objective labels", () => {
+  assert.deepEqual(["Lens", "Badge", "Objective", "Competency", "Outcome", "Key", "Approach"].map(plural), ["Lenses", "Badges", "Objectives", "Competencies", "Outcomes", "Keys", "Approaches"]);
 });

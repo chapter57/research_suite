@@ -3,8 +3,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { classDisplayName, classSubmissions, getClass, removeStudent, roster, type ClassInfo, type Enrollment, type Submission } from "@/lib/classes";
-import { catalogTitle } from "@/lib/coach/kits";
+import { catalogTitle, plural } from "@/lib/coach/kits";
 import { myKits, plugKit, type KitRow } from "@/lib/kitsClient";
+import KitPreviewModal from "./KitPreview";
 import { sb, useSession } from "@/lib/cloud";
 import SiteHeader from "./SiteHeader";
 
@@ -18,6 +19,7 @@ export default function ClassPage({ classId }: { classId: string }) {
   const [copied, setCopied] = useState(false);
   const [shelf, setShelf] = useState<KitRow[] | null>(null);
   const [swapTo, setSwapTo] = useState("");
+  const [viewing, setViewing] = useState(false);
 
   async function load() {
     try {
@@ -83,7 +85,8 @@ export default function ClassPage({ classId }: { classId: string }) {
           <h3 style={{ marginTop: 0 }}>Course kit {people.length > 0 ? "🔒" : ""}</h3>
           {cls.kit ? (
             <p style={{ margin: 0 }}>
-              <b>{catalogTitle(cls.kit)}</b> <span className="muted small">version {cls.kit.version} · {cls.kit.objectives.length} {(cls.kit.objectiveLabel || "objective").toLowerCase()}s</span>
+              <b>{catalogTitle(cls.kit)}</b> <span className="muted small">version {cls.kit.version} · {cls.kit.objectives.length} {plural((cls.kit.objectiveLabel || "objective").toLowerCase())}</span>{" "}
+              <button className="small" onClick={() => setViewing(true)}>View kit</button>
             </p>
           ) : (
             <p className="small muted" style={{ margin: 0 }}>No course kit. The coach uses general academic writing guidance.</p>
@@ -183,6 +186,9 @@ export default function ClassPage({ classId }: { classId: string }) {
           )}
         </section>
 
+        {viewing && cls.kit && (
+          <KitPreviewModal kit={cls.kit} version={cls.kit.version} heading={people.length ? "This class's course kit (locked)" : "This class's course kit"} onClose={() => setViewing(false)} />
+        )}
         {error && <p className="error">{error}</p>}
         <p style={{ marginTop: 24 }}>
           <button className="ghost small" onClick={deleteClass}>Delete this class</button>

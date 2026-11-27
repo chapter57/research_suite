@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { classesITeach } from "@/lib/classes";
 import type { Account } from "@/lib/cloud";
-import { catalogTitle, starters } from "@/lib/coach/kits";
+import { catalogTitle, plural, starters } from "@/lib/coach/kits";
 import { createKit, myKits, type KitRow } from "@/lib/kitsClient";
+import KitPreviewModal from "./KitPreview";
 
 export default function KitShelf({ account }: { account: Account }) {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function KitShelf({ account }: { account: Account }) {
   const [choosing, setChoosing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [previewing, setPreviewing] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -59,12 +61,24 @@ export default function KitShelf({ account }: { account: Account }) {
           <h3 style={{ marginTop: 0 }}>Start from…</h3>
           <div className="class-grid">
             {starters.map((s) => (
-              <button key={s.id} className="choice-card" disabled={busy} onClick={() => start(s.id)}>
+              <div key={s.id} className="choice-card starter-card">
                 <span className="choice-title" style={{ fontSize: 17 }}>{s.label}</span>
                 <span className="choice-text">{s.blurb}</span>
-              </button>
+                <span className="row" style={{ marginTop: 6 }}>
+                  {s.id !== "blank" && <button className="small" onClick={() => setPreviewing(s.id)}>Preview</button>}
+                  <button className="small primary" disabled={busy} onClick={() => start(s.id)}>Use this</button>
+                </span>
+              </div>
             ))}
           </div>
+          {previewing && (
+            <KitPreviewModal
+              kit={starters.find((x) => x.id === previewing)!.kit}
+              heading="Starter kit"
+              onClose={() => setPreviewing(null)}
+              actions={<button className="primary" disabled={busy} onClick={() => start(previewing)}>Use this starter</button>}
+            />
+          )}
           <p className="small muted" style={{ marginBottom: 0 }}>You can edit everything after choosing. Building a kit from your syllabus is coming soon.</p>
         </div>
       )}
@@ -81,8 +95,13 @@ export default function KitShelf({ account }: { account: Account }) {
           <Link href={`/kits/${k.id}`} className="card class-card" key={k.id}>
             <span className="class-name">{catalogTitle(k.content)}</span>
             {k.content.institution && <span className="small muted">{k.content.institution}</span>}
+            {k.content.description && <span className="card-blurb">{k.content.description}</span>}
+            <span className="chips">
+              {k.content.objectives.filter((o) => o.name.trim()).slice(0, 6).map((o) => <span className="chip" key={o.name}>{o.name}</span>)}
+              {k.content.objectives.length > 6 && <span className="chip">+{k.content.objectives.length - 6} more</span>}
+            </span>
             <span className="class-stats">
-              <span><b>{k.content.objectives.filter((o) => o.name.trim()).length}</b> {(k.content.objectiveLabel || "objective").toLowerCase()}s</span>
+              <span><b>{k.content.objectives.filter((o) => o.name.trim()).length}</b> {plural((k.content.objectiveLabel || "objective").toLowerCase())}</span>
               <span>version {k.version}</span>
               <span><b>{uses[k.id] ?? 0}</b> class{(uses[k.id] ?? 0) === 1 ? "" : "es"}</span>
             </span>

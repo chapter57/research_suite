@@ -5,6 +5,7 @@ import { classDisplayName, classesITeach, createClass, type ClassInfo } from "@/
 import { sb, type Account } from "@/lib/cloud";
 import { catalogTitle, starters } from "@/lib/coach/kits";
 import { createKit, frozenCopy, myKits, type KitRow } from "@/lib/kitsClient";
+import KitPreviewModal from "./KitPreview";
 
 type Row = ClassInfo & { students: number; turnedIn: number };
 
@@ -13,6 +14,10 @@ export default function TeacherClasses({ account }: { account: Account }) {
   const [newName, setNewName] = useState("");
   const [kits, setKits] = useState<KitRow[]>([]);
   const [kitChoice, setKitChoice] = useState("");
+  const [previewing, setPreviewing] = useState(false);
+  const chosen = kitChoice.startsWith("starter:")
+    ? { kit: starters.find((x) => x.id === kitChoice.slice(8))?.kit, version: undefined, heading: "Starter kit" }
+    : { kit: kits.find((k) => `kit:${k.id}` === kitChoice)?.content, version: kits.find((k) => `kit:${k.id}` === kitChoice)?.version, heading: "Your course kit" };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
@@ -90,7 +95,10 @@ export default function TeacherClasses({ account }: { account: Account }) {
         <h3 style={{ margin: 0, fontSize: 15 }}>Create a class</h3>
         <div className="fields">
           <label className="field">
-            <span>Course kit (plugged in for the life of the class)</span>
+            <span>
+              Course kit (plugged in for the life of the class){" "}
+              {chosen.kit && <button type="button" className="linklike small" onClick={() => setPreviewing(true)}>Preview kit</button>}
+            </span>
             <select value={kitChoice} onChange={(e) => setKitChoice(e.target.value)} aria-label="Course kit">
               {kits.length > 0 && (
                 <optgroup label="Your course kits">
@@ -112,6 +120,7 @@ export default function TeacherClasses({ account }: { account: Account }) {
           <span className="small muted">You can swap the kit until the first student joins. After that it&apos;s locked.</span>
         </div>
       </form>
+      {previewing && chosen.kit && <KitPreviewModal kit={chosen.kit} version={chosen.version} heading={chosen.heading} onClose={() => setPreviewing(false)} />}
       {note && <p className="small" style={{ color: "var(--note)" }}>{note}</p>}
       {error && <p className="error">{error}</p>}
       <p className="small muted" style={{ marginTop: 18 }}>

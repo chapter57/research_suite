@@ -33,6 +33,15 @@ export function catalogTitle(k: Pick<KitContent, "subject" | "number" | "title">
   return code && k.title.trim() ? `${code}: ${k.title.trim()}` : code || k.title.trim() || "Untitled course";
 }
 
+/** English plural of an objective label: Lens -> Lenses, Competency -> Competencies. */
+export function plural(word: string): string {
+  const w = word.trim();
+  if (!w) return w;
+  if (/(s|x|z|ch|sh)$/i.test(w)) return w + "es";
+  if (/[^aeiou]y$/i.test(w)) return w.slice(0, -1) + "ies";
+  return w + "s";
+}
+
 export function withArticle(word: string): string {
   return /^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`;
 }

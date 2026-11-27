@@ -1,7 +1,7 @@
 // Builds the coach's system prompt. Kept deterministic (no dates, no IDs) so the
 // prompt can be cached between requests, which lowers cost.
 import type { Mode } from "./modes.ts";
-import { catalogTitle, withArticle, type KitContent, type Objective } from "./kits.ts";
+import { catalogTitle, plural, withArticle, type KitContent, type Objective } from "./kits.ts";
 
 const CORE = `You are the writing coach inside Research Suite, a writing studio used by college students. Your job is to help students become better writers and researchers. The student does all of the writing.
 
@@ -43,7 +43,7 @@ export function buildSystemPrompt(kit: KitContent, mode: Mode, focus?: Objective
 Course: ${course}${kit.level ? ` (${kit.level})` : ""}. Citation style: ${kit.citationStyle || "as the instructor requires"}.
 ${kit.description}
 
-The course's ${label.toLowerCase()}s, which run across every assignment:
+The course's ${plural(label.toLowerCase())}, which run across every assignment:
 ${objectives}${guidance}
 </course>
 
