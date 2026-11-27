@@ -10,15 +10,25 @@ export function sb(): SupabaseClient {
   return client;
 }
 
+export type Role = "teacher" | "student";
+
 export interface Account {
   id: string;
   email: string;
   name: string;
+  /** The role chosen at sign-up (older accounts may not have one). */
+  chosenRole?: Role;
 }
 
 function toAccount(u: User | null | undefined): Account | null {
   if (!u) return null;
-  return { id: u.id, email: u.email ?? "", name: (u.user_metadata?.display_name as string) || u.email || "" };
+  const r = u.user_metadata?.role;
+  return {
+    id: u.id,
+    email: u.email ?? "",
+    name: (u.user_metadata?.display_name as string) || u.email || "",
+    chosenRole: r === "teacher" || r === "student" ? r : undefined,
+  };
 }
 
 export async function currentAccount(): Promise<Account | null> {
@@ -50,11 +60,50 @@ function friendly(message: string): string {
   return message;
 }
 
-export async function signUp(name: string, email: string, password: string): Promise<Account> {
-  const { data, error } = await sb().auth.signUp({ email: email.trim(), password, options: { data: { display_name: name.trim() } } });
+export async function signUp(name: string, email: string, password: string, role: Role): Promise<Account> {
+  const { data, error } = await sb().auth.signUp({ email: email.trim(), password, options: { data: { display_name: name.trim(), role } } });
   if (error) throw new Error(friendly(error.message));
   if (!data.session) throw new Error("Your account was created, but sign-in needs email confirmation. Please tell your instructor.");
-  return toAccount(data.user)!;
+  const account = toAccount(data.user)!;
+  if (role === "teacher") await becomeTeacher(account);
+  return account;
+}
+
+/** Register this account as a teacher (allowed to create classes). */
+export async function becomeTeacher(account: Account) {
+  const res = await sb().from("instructors").upsert({ user_id: account.id });
+  if (res.error) throw new Error("Your account was created, but teacher setup didn't finish: " + res.error.message);
+}
+
+/** Teacher or student. Teachers are accounts on the instructor list. */
+export async function roleOf(account: Account): Promise<Role> {
+  const res = await sb().from("instructors").select("user_id").eq("user_id", account.id);
+  if (!res.error && res.data.length) return "teacher";
+  if (account.chosenRole === "teacher") {
+    // Chose teacher at sign-up but registration didn't finish: try again.
+    try {
+      await becomeTeacher(account);
+      return "teacher";
+    } catch {
+      /* fall through */
+    }
+  }
+  return "student";
+}
+
+/** The signed-in account and its role, kept up to date. `undefined` while checking. */
+export function useSession(): { account: Account | null | undefined; role: Role | undefined } {
+  const account = useAccount();
+  const [role, setRole] = useState<Role | undefined>(undefined);
+  useEffect(() => {
+    if (!account) return setRole(undefined);
+    let live = true;
+    roleOf(account).then((r) => live && setRole(r)).catch(() => live && setRole(account.chosenRole ?? "student"));
+    return () => {
+      live = false;
+    };
+  }, [account]);
+  return { account, role };
 }
 
 export async function signIn(email: string, password: string): Promise<Account> {

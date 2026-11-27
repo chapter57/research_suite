@@ -3,10 +3,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { classSubmissions, getClass, removeStudent, roster, type ClassInfo, type Enrollment, type Submission } from "@/lib/classes";
-import { sb, useAccount } from "@/lib/cloud";
+import { sb, useSession } from "@/lib/cloud";
+import SiteHeader from "./SiteHeader";
 
 export default function ClassPage({ classId }: { classId: string }) {
-  const account = useAccount();
+  const { account, role } = useSession();
   const router = useRouter();
   const [cls, setCls] = useState<ClassInfo | null | undefined>(undefined);
   const [people, setPeople] = useState<Enrollment[]>([]);
@@ -64,13 +65,16 @@ export default function ClassPage({ classId }: { classId: string }) {
 
   return (
     <>
-      <div className="topbar">
-        <Link href="/" className="brand">Research Suite</Link>
-        <strong>{cls.name}</strong>
-        <span className="spacer" />
-        <button onClick={load}>Refresh</button>
-      </div>
-      <main className="home" style={{ maxWidth: 980 }}>
+      <SiteHeader account={account} role={role} active="teaching" />
+      <main className="home wide">
+        <div className="row section-head">
+          <Link href="/" className="small">← All classes</Link>
+        </div>
+        <div className="row section-head">
+          <h2>{cls.name}</h2>
+          <span className="spacer" />
+          <button onClick={load}>Refresh</button>
+        </div>
         <section className="card">
           <h3 style={{ marginTop: 0 }}>Join code</h3>
           <div className="row">

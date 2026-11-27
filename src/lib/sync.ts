@@ -265,7 +265,9 @@ export interface SyncResult {
 /** Download what's new in the cloud, then upload what's new here. */
 export function syncAll(account: Account): Promise<SyncResult> {
   return serial(async () => {
-    const cloudList = check(await sb().from("projects").select("*")) as CloudProject[];
+    // Only this account's own projects. (Teachers can also *read* work turned in
+    // to their classes; that must never be treated as their own.)
+    const cloudList = check(await sb().from("projects").select("*").eq("owner", account.id)) as CloudProject[];
     const result: SyncResult = { downloaded: 0, conflicts: 0 };
     const inCloud = new Set(cloudList.map((c) => c.id));
     for (const c of cloudList) {
@@ -289,7 +291,7 @@ export function syncAll(account: Account): Promise<SyncResult> {
 /** Before opening a project: bring in anything written on another computer. */
 export function pullProject(id: string, account: Account) {
   return serial(async () => {
-    const rows = check(await sb().from("projects").select("*").eq("id", id)) as CloudProject[];
+    const rows = check(await sb().from("projects").select("*").eq("id", id).eq("owner", account.id)) as CloudProject[];
     if (rows[0]) return pullOne(rows[0], account);
     return "same" as const;
   });
