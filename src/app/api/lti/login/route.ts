@@ -11,16 +11,24 @@ export const dynamic = "force-dynamic";
 async function handle(req: NextRequest) {
   if (!secretKey()) return page("Not set up yet", "Moodle connections aren't switched on for this Research Suite site yet.", 503);
   const p = await params(req);
-  const iss = p.get("iss");
+  const iss = p.get("iss")?.trim().replace(/\/+$/, "");
   const loginHint = p.get("login_hint");
   if (!iss || !loginHint) return page("Something's missing", "This link must be opened from the Research Suite activity in Moodle.");
-  const regs = await findRegistrations(iss, p.get("client_id") ?? undefined);
+  const sentClient = p.get("client_id")?.trim() || undefined;
+  const regs = await findRegistrations(iss, sentClient);
   const dep = p.get("lti_deployment_id");
   const reg = regs.find((r) => dep && r.deployment_id === dep) ?? regs.find((r) => !r.deployment_id) ?? (regs.length === 1 ? regs[0] : undefined);
   if (!reg) {
+    const forSite = sentClient ? (await findRegistrations(iss)).length : 0;
     return page(
       "This Moodle course isn't connected yet",
-      "Your instructor needs to finish connecting this Moodle course to a Research Suite class (Connect to Moodle on the class page).",
+      `Your instructor needs to finish connecting this Moodle course to a Research Suite class (Connect to Moodle on the class page). ` +
+        `For your instructor: Moodle sent the address ${iss} and the Client ID ${sentClient ?? "(none)"}` +
+        (dep ? ` (deployment ${dep})` : "") +
+        `. ` +
+        (forSite
+          ? `Research Suite has ${forSite} connection(s) for this Moodle address, but none with that Client ID. Check that the Client ID saved in Research Suite matches the Client ID of the Moodle tool this activity uses (More → LTI External tools → Research Suite → Edit). If the tool was added more than once, the activity may be using a different copy.`
+          : `Research Suite has no connection for this Moodle address yet.`),
       404,
     );
   }

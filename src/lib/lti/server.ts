@@ -23,7 +23,7 @@ function db(): SupabaseClient {
 }
 
 export async function findRegistrations(issuer: string, clientId?: string): Promise<Registration[]> {
-  let q = db().from("lti_registrations").select("*").eq("issuer", issuer);
+  let q = db().from("lti_registrations").select("*").in("issuer", [issuer, `${issuer}/`]);
   if (clientId) q = q.eq("client_id", clientId);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
