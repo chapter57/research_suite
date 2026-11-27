@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
+import ClassesPanel from "@/components/ClassesPanel";
 import { useAccount } from "@/lib/cloud";
 import { createProject, deleteProject, importProject, listProjects } from "@/lib/store";
 import { deleteFromCloud, syncAll, visibleTo } from "@/lib/sync";
@@ -94,6 +95,7 @@ export default function Home() {
       <p className="muted">Write your project, and the studio quietly records how it takes shape. Afterward, replay your process and talk through your thinking.</p>
 
       <AccountPanel account={account} syncing={syncing} syncNote={syncNote} onChange={() => setTick((t) => t + 1)} />
+      {account && <ClassesPanel account={account} />}
 
       <div className="row" style={{ marginTop: 16 }}>
         <button className="primary" onClick={onNew}>New project</button>

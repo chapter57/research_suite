@@ -169,3 +169,14 @@ textarea { width: 100%; resize: vertical; }
 .account-form { margin-top: 18px; display: grid; gap: 4px; }
 .cloud-status { font-size: 13px; color: var(--muted); }
 .cloud-status.off { color: var(--paste); }
+
+/* ---------- Classes ---------- */
+.classes { margin-top: 12px; display: grid; gap: 14px; }
+.classes h3 { margin: 0 0 6px; font-size: 15px; }
+.class-row { padding: 6px 0; border-top: 1px solid var(--line); }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; letter-spacing: .12em; background: var(--accent-soft); padding: 2px 6px; border-radius: 6px; color: var(--ink); }
+.big-code { font-size: 28px; padding: 6px 14px; }
+table.list { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.list th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.list td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.table-wrap { overflow-x: auto; }

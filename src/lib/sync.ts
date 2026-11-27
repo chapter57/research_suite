@@ -36,7 +36,7 @@ function serial<T>(job: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function check<T>(res: { data: T; error: { message: string } | null }): T {
+export function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
   return res.data;
 }
@@ -110,7 +110,7 @@ async function pushOne(id: string, account: Account) {
 
 // ---------------- Download ----------------
 
-interface CloudProject {
+export interface CloudProject {
   id: string;
   title: string;
   doc: Record<string, unknown> | null;
@@ -124,7 +124,7 @@ interface CloudProject {
   updated_at: string;
 }
 
-async function downloadEvents(id: string, fromSeq: number): Promise<{ start: number; events: RecEvent[] }> {
+export async function downloadEvents(id: string, fromSeq: number): Promise<{ start: number; events: RecEvent[] }> {
   const placed = new Map<number, RecEvent>();
   for (let page = 0; ; page++) {
     const rows = check(
@@ -152,7 +152,8 @@ async function downloadEvents(id: string, fromSeq: number): Promise<{ start: num
   return { start, events };
 }
 
-async function downloadReflections(id: string, account: Account) {
+/** A project's reflections from the cloud, with voice notes. */
+export async function fetchReflections(id: string, skip: Set<string> = new Set()): Promise<Reflection[]> {
   const rows = check(await sb().from("reflections").select("*").eq("project_id", id)) as {
     id: string;
     at: number;
@@ -162,15 +163,15 @@ async function downloadReflections(id: string, account: Account) {
     duration_ms: number | null;
     created_at: string;
   }[];
-  const have = new Set((await getReflections(id)).map((r) => r.id));
+  const out: Reflection[] = [];
   for (const row of rows) {
-    if (have.has(row.id)) continue;
+    if (skip.has(row.id)) continue;
     let audio: Blob | undefined;
     if (row.audio_path) {
       const res = await sb().storage.from("voice-notes").download(row.audio_path);
       if (!res.error) audio = res.data;
     }
-    const r: Reflection = {
+    out.push({
       id: row.id,
       projectId: id,
       at: row.at,
@@ -180,10 +181,14 @@ async function downloadReflections(id: string, account: Account) {
       durationMs: row.duration_ms ?? undefined,
       createdAt: Date.parse(row.created_at),
       synced: true,
-    };
-    await putReflection(r);
+    });
   }
-  void account;
+  return out.sort((a, b) => a.at - b.at || a.createdAt - b.createdAt);
+}
+
+async function downloadReflections(id: string) {
+  const have = new Set((await getReflections(id)).map((r) => r.id));
+  for (const r of await fetchReflections(id, have)) await putReflection(r);
 }
 
 function fromCloud(c: CloudProject, account: Account, local?: Project): Project {
@@ -222,7 +227,7 @@ async function pullOne(c: CloudProject, account: Account): Promise<"new" | "upda
     await putProject(fromCloud({ ...c, event_count: events.length }, account));
     await appendEvents(c.id, 0, events);
     if (c.snapshot_seq != null && c.snapshot_doc && c.snapshot_seq <= events.length) await putSnapshot(c.id, c.snapshot_seq, c.snapshot_doc);
-    await downloadReflections(c.id, account);
+    await downloadReflections(c.id);
     return "new";
   }
   const total = await countEvents(c.id);
@@ -246,7 +251,7 @@ async function pullOne(c: CloudProject, account: Account): Promise<"new" | "upda
     await putProject({ ...local, title: c.title, mla: c.mla ?? local.mla, author: c.author ?? local.author, owner: account.id });
     result = "updated";
   }
-  await downloadReflections(c.id, account);
+  await downloadReflections(c.id);
   return result;
 }
 

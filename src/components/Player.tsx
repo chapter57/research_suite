@@ -11,6 +11,7 @@ import { getDocSchema } from "@/lib/schema";
 import { deleteReflection, getEvents, getSnapshots, getProject, getReflections, newId, putReflection } from "@/lib/store";
 import type { AiEvent, Project, RecEvent, Reflection } from "@/lib/types";
 import DownloadMenu from "./DownloadMenu";
+import TurnInButton from "./TurnInButton";
 import { currentAccount, type Account } from "@/lib/cloud";
 import { deleteReflectionFromCloud, pullProject, pushProject } from "@/lib/sync";
 
@@ -52,16 +53,19 @@ function fmtClock(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function PlayerInner({
+export function PlayerInner({
   project,
   events,
   reflections: initialRefs,
   snapshots,
+  review,
 }: {
   project: Project;
   events: RecEvent[];
   reflections: Reflection[];
   snapshots: { seq: number; doc: Record<string, unknown> }[];
+  /** Instructor reviewing turned-in work: read-only, loaded from the cloud. */
+  review?: { banner: React.ReactNode; backHref: string };
 }) {
   const schema = getDocSchema();
   const engine = useMemo(() => {
@@ -78,7 +82,7 @@ function PlayerInner({
   }, [schema, events, snapshots]);
   const timeline = useMemo(() => buildTimeline(events), [events]);
   const stats = useMemo(() => computeStats(events), [events]);
-  const readOnly = !!project.imported;
+  const readOnly = !!project.imported || !!review;
 
   // Session number for each event index.
   const sessionOf = useMemo(() => {
@@ -293,12 +297,17 @@ function PlayerInner({
         <span className="muted small">Replay &amp; reflect</span>
         <span className="spacer" />
         {!readOnly && <Link href={`/write/${project.id}`}><button>Back to writing</button></Link>}
-        <DownloadMenu projectId={project.id} />
+        {!readOnly && <TurnInButton projectId={project.id} />}
+        {review ? <Link href={review.backHref}><button>Back to class</button></Link> : <DownloadMenu projectId={project.id} />}
       </div>
-      {readOnly && (
-        <div className="banner">
-          Viewing a shared recording{project.author ? ` from ${project.author}` : ""}. Reflections are shown as the writer recorded them.
-        </div>
+      {review ? (
+        <div className="banner">{review.banner}</div>
+      ) : (
+        readOnly && (
+          <div className="banner">
+            Viewing a shared recording{project.author ? ` from ${project.author}` : ""}. Reflections are shown as the writer recorded them.
+          </div>
+        )
       )}
       <div className="replay">
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>

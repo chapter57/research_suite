@@ -16,6 +16,7 @@ import { appendEvents, getEvents, getEventsFrom, getProject, latestSnapshot, put
 import type { AiEvent, Project, RecEvent } from "@/lib/types";
 import CoachPanel from "./CoachPanel";
 import DownloadMenu from "./DownloadMenu";
+import TurnInButton from "./TurnInButton";
 
 export default function Writer({ projectId }: { projectId: string }) {
   const [loaded, setLoaded] = useState<{ project: Project; doc: PMNode; seq: number; snapSeq: number; failures: number; account: Account | null } | null>(null);
@@ -358,6 +359,7 @@ function WriterInner({
           </button>
         )}
         <Link href={`/replay/${initial.id}`} onClick={() => flushAll()}><button>Replay &amp; reflect</button></Link>
+        <TurnInButton projectId={initial.id} beforeTurnIn={flushAll} />
         <DownloadMenu projectId={initial.id} beforeExport={flushAll} />
       </div>
       <div className={`workspace ${coachOn ? "with-coach" : ""}`}>
