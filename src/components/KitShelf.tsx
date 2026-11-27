@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { classesITeach } from "@/lib/classes";
 import type { Account } from "@/lib/cloud";
-import { catalogTitle, plural, starters } from "@/lib/coach/kits";
+import { catalogTitle, isCopyOf, plural, starters } from "@/lib/coach/kits";
 import { createKit, myKits, type KitRow } from "@/lib/kitsClient";
 import KitPreviewModal from "./KitPreview";
 
@@ -36,7 +36,7 @@ export default function KitShelf({ account }: { account: Account }) {
     setBusy(true);
     try {
       const s = starters.find((x) => x.id === id)!;
-      const row = await createKit(s.kit);
+      const row = await createKit({ ...s.kit, ...(s.id !== "blank" ? { starterId: s.id } : {}) });
       router.push(`/kits/${row.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -66,7 +66,17 @@ export default function KitShelf({ account }: { account: Account }) {
                 <span className="choice-text">{s.blurb}</span>
                 <span className="row" style={{ marginTop: 6 }}>
                   {s.id !== "blank" && <button className="small" onClick={() => setPreviewing(s.id)}>Preview</button>}
-                  <button className="small primary" disabled={busy} onClick={() => start(s.id)}>Use this</button>
+                  {(() => {
+                    const mine = s.id !== "blank" ? kits?.find((k) => isCopyOf(k.content, s)) : undefined;
+                    return mine ? (
+                      <>
+                        <Link href={`/kits/${mine.id}`}><button className="small primary">Open your copy</button></Link>
+                        <button className="small ghost" disabled={busy} onClick={() => confirm("You already have this kit on your shelf. Add a second copy?") && start(s.id)}>Add another copy</button>
+                      </>
+                    ) : (
+                      <button className="small primary" disabled={busy} onClick={() => start(s.id)}>Use this</button>
+                    );
+                  })()}
                 </span>
               </div>
             ))}
@@ -76,7 +86,14 @@ export default function KitShelf({ account }: { account: Account }) {
               kit={starters.find((x) => x.id === previewing)!.kit}
               heading="Starter kit"
               onClose={() => setPreviewing(null)}
-              actions={<button className="primary" disabled={busy} onClick={() => start(previewing)}>Use this starter</button>}
+              actions={(() => {
+                const mine = kits?.find((k) => isCopyOf(k.content, starters.find((x) => x.id === previewing)!));
+                return mine ? (
+                  <Link href={`/kits/${mine.id}`}><button className="primary">Open your copy</button></Link>
+                ) : (
+                  <button className="primary" disabled={busy} onClick={() => start(previewing)}>Use this starter</button>
+                );
+              })()}
             />
           )}
           <p className="small muted" style={{ marginBottom: 0 }}>You can edit everything after choosing. Building a kit from your syllabus is coming soon.</p>

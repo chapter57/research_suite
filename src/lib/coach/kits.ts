@@ -20,6 +20,8 @@ export interface KitContent {
   objectives: Objective[];
   citationStyle: string;
   guidance?: string; // the teacher's priorities for the coach
+  /** Which starter kit this was copied from, if any. */
+  starterId?: string;
 }
 
 /** A kit as plugged into a class: a frozen copy. */
@@ -80,7 +82,13 @@ export function cleanKit(raw: unknown): KitContent {
     }),
     citationStyle: str(r.citationStyle, 60),
     guidance: str(r.guidance, 2000) || undefined,
+    starterId: str(r.starterId, 40) || undefined,
   };
+}
+
+/** Is this shelf kit a copy of that starter? (Older copies are matched by title.) */
+export function isCopyOf(kit: KitContent, starter: { id: string; kit: KitContent }): boolean {
+  return kit.starterId === starter.id || (!kit.starterId && catalogTitle(kit) === catalogTitle(starter.kit));
 }
 
 // ---------------- Starter kits ----------------
@@ -210,7 +218,7 @@ export const generalWriting: KitContent = {
 
 export const starters: { id: string; label: string; blurb: string; kit: KitContent }[] = [
   { id: "english102", label: "English 102: Composition and Critical Reading", blurb: "The seven ENGL 102 skill badges.", kit: english102 },
-  { id: "lenses", label: "Literary Theory and Criticism", blurb: "Eight critical lenses, from formalism to ecocriticism.", kit: literaryLenses },
+  { id: "lenses", label: "English 300: Literary Theory and Criticism", blurb: "Eight critical lenses, from formalism to ecocriticism.", kit: literaryLenses },
   {
     id: "blank",
     label: "Blank kit",

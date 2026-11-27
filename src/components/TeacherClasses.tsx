@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { classDisplayName, classesITeach, createClass, type ClassInfo } from "@/lib/classes";
 import { sb, type Account } from "@/lib/cloud";
-import { catalogTitle, starters } from "@/lib/coach/kits";
+import { catalogTitle, isCopyOf, starters } from "@/lib/coach/kits";
 import { createKit, frozenCopy, myKits, type KitRow } from "@/lib/kitsClient";
 import KitPreviewModal from "./KitPreview";
 
@@ -15,6 +15,8 @@ export default function TeacherClasses({ account }: { account: Account }) {
   const [kits, setKits] = useState<KitRow[]>([]);
   const [kitChoice, setKitChoice] = useState("");
   const [previewing, setPreviewing] = useState(false);
+  // Starters you already have a copy of aren't listed twice.
+  const unusedStarters = starters.filter((s) => s.id !== "blank" && !kits.some((k) => isCopyOf(k.content, s)));
   const chosen = kitChoice.startsWith("starter:")
     ? { kit: starters.find((x) => x.id === kitChoice.slice(8))?.kit, version: undefined, heading: "Starter kit" }
     : { kit: kits.find((k) => `kit:${k.id}` === kitChoice)?.content, version: kits.find((k) => `kit:${k.id}` === kitChoice)?.version, heading: "Your course kit" };
@@ -52,8 +54,9 @@ export default function TeacherClasses({ account }: { account: Account }) {
     try {
       let row: KitRow | undefined;
       if (kitChoice.startsWith("starter:")) {
-        // A starter goes onto your shelf first, so you can edit it for future classes.
-        row = await createKit(starters.find((s) => s.id === kitChoice.slice(8))!.kit);
+        // A starter goes onto your shelf first (once), so you can edit it for future classes.
+        const starter = starters.find((s) => s.id === kitChoice.slice(8))!;
+        row = kits.find((k) => isCopyOf(k.content, starter)) ?? (await createKit({ ...starter.kit, starterId: starter.id }));
       } else row = kits.find((k) => `kit:${k.id}` === kitChoice);
       if (!row) throw new Error("Choose a course kit for this class.");
       const c = await createClass(newName, frozenCopy(row));
@@ -105,9 +108,11 @@ export default function TeacherClasses({ account }: { account: Account }) {
                   {kits.map((k) => <option key={k.id} value={`kit:${k.id}`}>{catalogTitle(k.content)} (version {k.version})</option>)}
                 </optgroup>
               )}
-              <optgroup label="Starter kits">
-                {starters.filter((s) => s.id !== "blank").map((s) => <option key={s.id} value={`starter:${s.id}`}>{s.label}</option>)}
-              </optgroup>
+              {unusedStarters.length > 0 && (
+                <optgroup label="Starter kits">
+                  {unusedStarters.map((s) => <option key={s.id} value={`starter:${s.id}`}>{s.label}</option>)}
+                </optgroup>
+              )}
             </select>
           </label>
           <label className="field">
