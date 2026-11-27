@@ -24,10 +24,11 @@ The first course pack is **ENGL 102: Composition and Critical Reading**, built a
 | Process stats (sessions, active time, typed vs. pasted, coach use) | ✅ |
 | AI coach: 5 modes, course-skill focus, on/off toggle, no-copy panel, daily limit | ✅ |
 | Download: MLA paper (Word, PDF), replay video (MP4), project file for Moodle | ✅ |
-| Accounts, cloud storage, instructor dashboard, Moodle (LTI) integration | Planned |
+| Accounts and cloud saving: sign in, work syncs between computers (Supabase) | ✅ |
+| Instructor dashboard, Moodle (LTI) integration | Planned |
 
-Storage in 1.0 is **in the student's browser** (IndexedDB). Students should export to back up their work, and
-export to submit. An instructor opens a submitted file with **Open a shared recording…** on the home page.
+Work is kept in the student's browser (IndexedDB) and, when signed in, synced to their account in the cloud
+(Supabase; tables and security rules in `supabase/schema.sql`). Students export to submit. An instructor opens a submitted file with **Open a shared recording…** on the home page.
 
 ## Running it
 

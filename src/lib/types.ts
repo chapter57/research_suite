@@ -52,6 +52,8 @@ export interface Reflection {
   audio?: Blob;
   durationMs?: number;
   createdAt: number;
+  /** Uploaded to the cloud. */
+  synced?: boolean;
 }
 
 export interface Project {
@@ -68,4 +70,10 @@ export interface Project {
   author?: string;
   /** Heading details for the MLA-formatted paper. */
   mla?: { name: string; instructor: string; course: string; date: string };
+  /** Cloud account that owns this project (absent: this computer only). */
+  owner?: string;
+  /** How many recording events the cloud has. */
+  syncedThrough?: number;
+  /** Snapshot last uploaded to the cloud. */
+  snapPushedSeq?: number;
 }

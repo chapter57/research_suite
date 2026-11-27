@@ -2,7 +2,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import AccountPanel from "@/components/AccountPanel";
+import { useAccount } from "@/lib/cloud";
 import { createProject, deleteProject, importProject, listProjects } from "@/lib/store";
+import { deleteFromCloud, syncAll, visibleTo } from "@/lib/sync";
 import type { Project } from "@/lib/types";
 
 export default function Home() {
@@ -11,15 +14,50 @@ export default function Home() {
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const refresh = () => listProjects().then(setProjects).catch((e) => setError(String(e)));
+  const account = useAccount();
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState("");
+  const [tick, setTick] = useState(0);
+
+  const refresh = () =>
+    listProjects()
+      .then((all) => setProjects(all.filter((p) => visibleTo(p, account ?? null))))
+      .catch((e) => setError(String(e)));
+
   useEffect(() => {
+    if (account === undefined) return;
     refresh();
-  }, []);
+    if (!account) return;
+    let live = true;
+    (async () => {
+      setSyncing(true);
+      setSyncNote("");
+      try {
+        const before = (await listProjects()).filter((p) => !p.imported && !p.owner).length;
+        const r = await syncAll(account);
+        if (!live) return;
+        const notes = [];
+        if (before) notes.push(`${before} project${before === 1 ? "" : "s"} already on this computer ${before === 1 ? "was" : "were"} added to your account.`);
+        if (r.downloaded) notes.push(`${r.downloaded} project${r.downloaded === 1 ? "" : "s"} downloaded from your account.`);
+        if (r.conflicts) notes.push(`A project was changed on two computers; this computer's version was kept as a copy.`);
+        setSyncNote(notes.join(" ") || "Everything is up to date.");
+      } catch {
+        if (live) setSyncNote("Couldn't reach the cloud right now. Your work is safe on this computer and will sync later.");
+      } finally {
+        if (live) setSyncing(false);
+        if (live) refresh();
+      }
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account?.id, account === undefined, tick]);
 
   async function onNew() {
     const title = prompt("Name your project", "Untitled project");
     if (title === null) return;
-    const p = await createProject(title.trim() || "Untitled project");
+    const p = await createProject(title.trim() || "Untitled project", account?.id);
     router.push(`/write/${p.id}`);
   }
 
@@ -36,7 +74,16 @@ export default function Home() {
   }
 
   async function onDelete(p: Project) {
-    if (!confirm(`Delete "${p.title}" and its whole recording? This can't be undone.`)) return;
+    const inCloud = !!account && p.owner === account.id;
+    if (!confirm(`Delete "${p.title}" and its whole recording${inCloud ? " from your account and every computer" : ""}? This can't be undone.`)) return;
+    if (inCloud) {
+      try {
+        await deleteFromCloud(p.id, account!);
+      } catch {
+        setError("Couldn't delete it from the cloud. Check your connection and try again.");
+        return;
+      }
+    }
     await deleteProject(p.id);
     refresh();
   }
@@ -45,6 +92,8 @@ export default function Home() {
     <main className="home">
       <h1>Research Suite</h1>
       <p className="muted">Write your project, and the studio quietly records how it takes shape. Afterward, replay your process and talk through your thinking.</p>
+
+      <AccountPanel account={account} syncing={syncing} syncNote={syncNote} onChange={() => setTick((t) => t + 1)} />
 
       <div className="row" style={{ marginTop: 16 }}>
         <button className="primary" onClick={onNew}>New project</button>
@@ -90,7 +139,9 @@ export default function Home() {
         </div>
       </div>
       <p className="small muted" style={{ marginTop: 24 }}>
-        Your projects are stored in this browser on this device. Use <b>Export</b> to back up a project or submit it.
+        {account
+          ? "Your projects are saved in this browser and in your account. Signing out removes them from this computer; they stay in your account."
+          : "Not signed in: projects are saved only in this browser on this computer. Sign in to keep them in your account."}
       </p>
     </main>
   );

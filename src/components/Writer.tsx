@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { course } from "@/config/course";
 import { ReplayEngine, wordCount } from "@/lib/replay";
 import { getDocSchema, schemaExtensions } from "@/lib/schema";
+import { currentAccount, type Account } from "@/lib/cloud";
+import { pullProject, pushProject } from "@/lib/sync";
 import { MERGE_GAP_MS, mergeTyping, startTyping, stepsToJSON, type PendingTyping } from "@/lib/compact";
 import { appendEvents, getEvents, getEventsFrom, getProject, latestSnapshot, putProject, putSnapshot } from "@/lib/store";
 import type { AiEvent, Project, RecEvent } from "@/lib/types";
@@ -16,14 +18,21 @@ import CoachPanel from "./CoachPanel";
 import DownloadMenu from "./DownloadMenu";
 
 export default function Writer({ projectId }: { projectId: string }) {
-  const [loaded, setLoaded] = useState<{ project: Project; doc: PMNode; seq: number; snapSeq: number; failures: number } | null>(null);
+  const [loaded, setLoaded] = useState<{ project: Project; doc: PMNode; seq: number; snapSeq: number; failures: number; account: Account | null } | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     (async () => {
-      const project = await getProject(projectId);
+      const account = await currentAccount();
+      let project = await getProject(projectId);
       if (!project) return setError("Project not found on this device.");
       if (project.imported) return setError("This is a shared recording. It can be replayed but not edited.");
+      if (project.owner && project.owner !== account?.id) return setError("This project belongs to another account. Sign in to that account to open it.");
+      if (account && project.owner === account.id) {
+        // Bring in anything written on another computer (but don't wait forever if offline).
+        await Promise.race([pullProject(projectId, account).catch(() => {}), new Promise((r) => setTimeout(r, 6000))]);
+        project = (await getProject(projectId)) ?? project;
+      }
       const schema = getDocSchema();
       // Open from the latest snapshot and replay only what came after it.
       const snap = await latestSnapshot(projectId);
@@ -33,7 +42,7 @@ export default function Writer({ projectId }: { projectId: string }) {
           const tail = await getEventsFrom(projectId, snap.seq);
           const engine = new ReplayEngine(schema, tail, 200, base);
           const doc = engine.final();
-          return setLoaded({ project, doc, seq: snap.seq + tail.length, snapSeq: snap.seq, failures: engine.failures });
+          return setLoaded({ project, doc, seq: snap.seq + tail.length, snapSeq: snap.seq, failures: engine.failures, account });
         } catch (e) {
           console.warn("Snapshot unusable; replaying the full recording", e);
         }
@@ -41,7 +50,7 @@ export default function Writer({ projectId }: { projectId: string }) {
       const events = await getEvents(projectId);
       const engine = new ReplayEngine(schema, events);
       const doc = engine.final();
-      setLoaded({ project, doc, seq: events.length, snapSeq: 0, failures: engine.failures });
+      setLoaded({ project, doc, seq: events.length, snapSeq: 0, failures: engine.failures, account });
     })().catch((e) => setError(String(e)));
   }, [projectId]);
 
@@ -64,13 +73,46 @@ const SNAPSHOT_EVERY = 400;
 
 type Entry = { e: RecEvent; doc: PMNode };
 
-function WriterInner({ project: initial, doc, seq: initialSeq, snapSeq, failures }: { project: Project; doc: PMNode; seq: number; snapSeq: number; failures: number }) {
+function WriterInner({
+  project: initial,
+  doc,
+  seq: initialSeq,
+  snapSeq,
+  failures,
+  account,
+}: {
+  project: Project;
+  doc: PMNode;
+  seq: number;
+  snapSeq: number;
+  failures: number;
+  account: Account | null;
+}) {
   const project = useRef<Project>(initial);
   const [title, setTitle] = useState(initial.title);
   const [words, setWords] = useState(initial.wordCount);
   const [privateMode, setPrivateMode] = useState(false);
   const [coachOn, setCoachOn] = useState(course.aiAvailable && course.aiOnByDefault);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const [cloudState, setCloudState] = useState<"off" | "synced" | "pending" | "offline">(account ? "synced" : "off");
+
+  // ---- Cloud upload (background, every few seconds while writing) ----
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushNow = useCallback(() => {
+    if (!account) return;
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = null;
+    pushProject(initial.id, account)
+      .then(() => setCloudState((s) => (s === "pending" && pushTimer.current ? s : "synced")))
+      .catch(() => setCloudState("offline"));
+  }, [account, initial.id]);
+  const pushSoon = useCallback(() => {
+    if (!account) return;
+    setCloudState((s) => (s === "offline" ? s : "pending"));
+    if (!pushTimer.current) pushTimer.current = setTimeout(pushNow, 8000);
+  }, [account, pushNow]);
+  const pushSoonRef = useRef(pushSoon);
+  pushSoonRef.current = pushSoon;
 
   // ---- Recorder ----
   // Finished events wait in `buffer` until they are written to storage. Plain
@@ -143,6 +185,7 @@ function WriterInner({ project: initial, doc, seq: initialSeq, snapSeq, failures
             };
           }
           await putProject(project.current);
+          pushSoonRef.current();
           unsaved.current = buffer.current.length > 0;
           setSaveState(buffer.current.length ? "saving" : "saved");
         } catch (e) {
@@ -239,7 +282,7 @@ function WriterInner({ project: initial, doc, seq: initialSeq, snapSeq, failures
       record({ type: "reset", t: Date.now(), doc: editor.getJSON() as Record<string, unknown>, reason: "repair" }, editor.state.doc);
     }
     const onHide = () => {
-      if (document.visibilityState === "hidden") flushAll();
+      if (document.visibilityState === "hidden") flushAll().then(() => pushNow());
     };
     // If the page is closed in the split second before a save finishes, ask first.
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -255,7 +298,7 @@ function WriterInner({ project: initial, doc, seq: initialSeq, snapSeq, failures
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", flushAll);
       window.removeEventListener("beforeunload", onBeforeUnload);
-      flushAll();
+      flushAll().then(() => pushNow());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
@@ -302,6 +345,9 @@ function WriterInner({ project: initial, doc, seq: initialSeq, snapSeq, failures
           <span className="dot" /> {privateMode ? "Private writing" : "Recording"}
         </span>
         <span className="muted small">{words} words · {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save!" : "Saved"}</span>
+        <span className={`cloud-status ${cloudState === "off" || cloudState === "offline" ? "off" : ""}`} title={account ? `Signed in as ${account.email}` : "Sign in on the home page to save to your account"}>
+          {cloudState === "off" ? "· This computer only" : cloudState === "offline" ? "· Offline: will sync later" : cloudState === "pending" ? "· Syncing…" : "· In your account"}
+        </span>
         <span className="spacer" />
         <button onClick={togglePrivate} className={privateMode ? "on" : ""} title="Pause detailed recording. The replay will show that private writing happened here.">
           {privateMode ? "Resume recording" : "Private mode"}

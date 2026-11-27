@@ -11,16 +11,33 @@ import { getDocSchema } from "@/lib/schema";
 import { deleteReflection, getEvents, getSnapshots, getProject, getReflections, newId, putReflection } from "@/lib/store";
 import type { AiEvent, Project, RecEvent, Reflection } from "@/lib/types";
 import DownloadMenu from "./DownloadMenu";
+import { currentAccount, type Account } from "@/lib/cloud";
+import { deleteReflectionFromCloud, pullProject, pushProject } from "@/lib/sync";
 
 const SPEEDS = [1, 2, 4, 8, 16, 32];
+
+// The signed-in account (if any), for uploading reflections.
+const accountRef: { current: Account | null } = { current: null };
+
+function upload(projectId: string) {
+  const a = accountRef.current;
+  if (a) pushProject(projectId, a).catch(() => {});
+}
 
 export default function Player({ projectId }: { projectId: string }) {
   const [data, setData] = useState<{ project: Project; events: RecEvent[]; reflections: Reflection[]; snapshots: { seq: number; doc: Record<string, unknown> }[] } | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     (async () => {
-      const project = await getProject(projectId);
+      const account = await currentAccount();
+      let project = await getProject(projectId);
       if (!project) return setError("Project not found on this device.");
+      if (project.owner && project.owner !== account?.id) return setError("This project belongs to another account. Sign in to that account to open it.");
+      if (account && project.owner === account.id) {
+        await Promise.race([pullProject(projectId, account).catch(() => {}), new Promise((r) => setTimeout(r, 6000))]);
+        project = (await getProject(projectId)) ?? project;
+      }
+      accountRef.current = account;
       const [events, reflections, snapshots] = await Promise.all([getEvents(projectId), getReflections(projectId), getSnapshots(projectId)]);
       setData({ project, events, reflections, snapshots });
     })().catch((e) => setError(String(e)));
@@ -206,6 +223,7 @@ function PlayerInner({
     if (!noteText.trim()) return;
     const r: Reflection = { id: newId(), projectId: project.id, at: count, kind: "text", text: noteText.trim(), createdAt: Date.now() };
     await putReflection(r);
+    upload(project.id);
     setRefs((rs) => [...rs, r].sort((a, b) => a.at - b.at));
     setNoteText("");
   }
@@ -228,6 +246,7 @@ function PlayerInner({
           text: noteText.trim() || undefined, durationMs: Date.now() - started, createdAt: Date.now(),
         };
         await putReflection(r);
+        upload(project.id);
         setRefs((rs) => [...rs, r].sort((a, b) => a.at - b.at));
         setNoteText("");
       };
@@ -244,6 +263,7 @@ function PlayerInner({
   async function removeNote(id: string) {
     if (!confirm("Delete this reflection?")) return;
     await deleteReflection(id);
+    if (accountRef.current && project.owner === accountRef.current.id) deleteReflectionFromCloud(id).catch(() => {});
     setRefs((rs) => rs.filter((r) => r.id !== id));
   }
 

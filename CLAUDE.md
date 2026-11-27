@@ -8,3 +8,10 @@
 - Production deploys come from the `main` branch via Vercel (https://researchsuites.vercel.app/).
   Keep `main` and `claude/friendly-brahmagupta-ugtxgi` in sync when pushing.
 - Before pushing: `npm test`, `npm run typecheck`, and `npm run build` should all pass.
+- Cloud: Supabase project `sgfdlgbnnrrtvwcdbbef` (URL and publishable key in `src/config/cloud.ts`; the key is
+  public by design). Database tables and owner-only security rules: `supabase/schema.sql`; the founder runs any
+  SQL changes in the Supabase SQL Editor. Sign-up uses email + password with email confirmation turned off,
+  because Supabase's built-in email only reaches the account owner.
+- Sync design (`src/lib/sync.ts`): the browser copy is the working copy; events upload as overlapping chunks
+  (the last event is always re-sent). Test accounts created while testing should be listed for the founder to
+  delete (Supabase: Authentication -> Users).

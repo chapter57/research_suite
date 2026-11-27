@@ -48,9 +48,9 @@ export async function putProject(p: Project) {
   await (await db()).put("projects", p);
 }
 
-export async function createProject(title: string): Promise<Project> {
+export async function createProject(title: string, owner?: string): Promise<Project> {
   const now = Date.now();
-  const p: Project = { id: newId(), title, createdAt: now, updatedAt: now, doc: null, wordCount: 0, eventCount: 0 };
+  const p: Project = { id: newId(), title, createdAt: now, updatedAt: now, doc: null, wordCount: 0, eventCount: 0, ...(owner ? { owner } : {}) };
   await putProject(p);
   return p;
 }
@@ -78,10 +78,23 @@ export async function getEvents(projectId: string): Promise<RecEvent[]> {
   return rows.map((r) => r.e);
 }
 
+export async function countEvents(projectId: string): Promise<number> {
+  return (await db()).count("events", IDBKeyRange.bound([projectId, 0], [projectId, Infinity]));
+}
+
 /** Events from sequence number `fromSeq` onward. */
 export async function getEventsFrom(projectId: string, fromSeq: number): Promise<RecEvent[]> {
   const rows = await (await db()).getAll("events", IDBKeyRange.bound([projectId, fromSeq], [projectId, Infinity]));
   return rows.map((r) => r.e);
+}
+
+/** Remove recorded events and snapshots from `fromSeq` onward (used when the cloud copy wins). */
+export async function truncateRecording(projectId: string, fromSeq: number) {
+  const d = await db();
+  const tx = d.transaction(["events", "snapshots"], "readwrite");
+  await tx.objectStore("events").delete(IDBKeyRange.bound([projectId, fromSeq], [projectId, Infinity]));
+  await tx.objectStore("snapshots").delete(IDBKeyRange.bound([projectId, fromSeq + 1], [projectId, Infinity]));
+  await tx.done;
 }
 
 export async function putSnapshot(projectId: string, seq: number, doc: Record<string, unknown>) {

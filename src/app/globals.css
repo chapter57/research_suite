@@ -163,3 +163,9 @@ textarea { width: 100%; resize: vertical; }
 .video-preview { width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; border: 1px solid var(--line); background: #efece5; }
 .progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 8px 0 4px; }
 .progress div { height: 100%; background: var(--accent); transition: width .3s; }
+
+/* ---------- Account ---------- */
+.account { margin-top: 18px; }
+.account-form { margin-top: 18px; display: grid; gap: 4px; }
+.cloud-status { font-size: 13px; color: var(--muted); }
+.cloud-status.off { color: var(--paste); }
