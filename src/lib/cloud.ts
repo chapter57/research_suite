@@ -71,8 +71,9 @@ export async function signUp(name: string, email: string, password: string, role
 
 /** Register this account as a teacher (allowed to create classes). */
 export async function becomeTeacher(account: Account) {
-  const res = await sb().from("instructors").upsert({ user_id: account.id });
-  if (res.error) throw new Error("Your account was created, but teacher setup didn't finish: " + res.error.message);
+  const res = await sb().from("instructors").insert({ user_id: account.id });
+  // 23505 = already registered, which is fine.
+  if (res.error && res.error.code !== "23505") throw new Error("Your account was created, but teacher setup didn't finish: " + res.error.message);
 }
 
 /** Teacher or student. Teachers are accounts on the instructor list. */
