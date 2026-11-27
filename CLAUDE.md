@@ -24,3 +24,8 @@
   resolves the kit server-side (`src/lib/coach/kitServer.ts`): class kit, a teacher's own kit, a test kit
   (teachers only), else general writing. Core no-ghostwriting rules always come before kit text.
 - Local testing of the coach route against Supabase needs `NODE_USE_ENV_PROXY=1` (the sandbox proxies HTTPS).
+- Moodle (LTI 1.3; `supabase/lti.sql`, `src/lib/lti/`, `src/app/api/lti/`): a teacher connects a class from
+  the class page (Moodle course-level external tool). The server uses `SUPABASE_SECRET_KEY` (Vercel env only)
+  to create placeholder-email accounts for Moodle students (never matched by email), enroll them, and sign
+  them in via a one-time magic link redeemed server-side. Teachers link their Moodle identity once by signing
+  in; only the class owner can. `/api/lti/jwks` publishes no key yet (no grade services).
