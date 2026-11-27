@@ -92,7 +92,6 @@ function WriterInner({
   const project = useRef<Project>(initial);
   const [title, setTitle] = useState(initial.title);
   const [words, setWords] = useState(initial.wordCount);
-  const [privateMode, setPrivateMode] = useState(false);
   const [coachOn, setCoachOn] = useState(course.aiAvailable && course.aiOnByDefault);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [cloudState, setCloudState] = useState<"off" | "synced" | "pending" | "offline">(account ? "synced" : "off");
@@ -126,8 +125,6 @@ function WriterInner({
   const lastSnap = useRef(snapSeq);
   const chain = useRef<Promise<void>>(Promise.resolve());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const privateRef = useRef(false);
-  const privateDirty = useRef(false);
   const editorRef = useRef<Editor | null>(null);
   // Latest document, kept outside the editor so saving still works after it closes.
   const latestDoc = useRef<PMNode | null>(null);
@@ -246,12 +243,6 @@ function WriterInner({
       if (!transaction.docChanged) return;
       latestDoc.current = transaction.doc;
       setWords(wordCount(ed.getText()));
-      if (privateRef.current) {
-        privateDirty.current = true;
-        setSaveState("saving");
-        schedule.current();
-        return;
-      }
       const ui = transaction.getMeta("uiEvent") as "paste" | "cut" | "drop" | undefined;
       const now = Date.now();
       const inserted = insertedChars(transaction);
@@ -304,17 +295,6 @@ function WriterInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
-  function togglePrivate() {
-    const next = !privateRef.current;
-    if (!next && privateDirty.current && editorRef.current) {
-      // Leaving private mode: store the result as a single jump in the timeline.
-      record({ type: "reset", t: Date.now(), doc: editorRef.current.getJSON() as Record<string, unknown>, reason: "private" }, editorRef.current.state.doc);
-      privateDirty.current = false;
-    }
-    privateRef.current = next;
-    setPrivateMode(next);
-  }
-
   function saveTitle(t: string) {
     project.current = { ...project.current, title: t.trim() || "Untitled project" };
     flush();
@@ -342,17 +322,14 @@ function WriterInner({
       <div className="topbar">
         <Link href="/" className="brand">Research Suite</Link>
         <input className="title-input" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={(e) => saveTitle(e.target.value)} aria-label="Project title" />
-        <span className={`rec ${privateMode ? "paused" : ""}`} title={privateMode ? "Not recording keystrokes. The result will appear as one jump in your replay." : "Your writing process is being recorded"}>
-          <span className="dot" /> {privateMode ? "Private writing" : "Recording"}
+        <span className="rec" title="Your writing process is being recorded for your replay">
+          <span className="dot" /> Recording
         </span>
         <span className="muted small">{words} words · {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save!" : "Saved"}</span>
         <span className={`cloud-status ${cloudState === "off" || cloudState === "offline" ? "off" : ""}`} title={account ? `Signed in as ${account.email}` : "Sign in on the home page to save to your account"}>
           {cloudState === "off" ? "· This computer only" : cloudState === "offline" ? "· Offline: will sync later" : cloudState === "pending" ? "· Syncing…" : "· In your account"}
         </span>
         <span className="spacer" />
-        <button onClick={togglePrivate} className={privateMode ? "on" : ""} title="Pause detailed recording. The replay will show that private writing happened here.">
-          {privateMode ? "Resume recording" : "Private mode"}
-        </button>
         {course.aiAvailable && (
           <button onClick={() => setCoachOn((v) => !v)} className={coachOn ? "on" : ""}>
             AI coach: {coachOn ? "On" : "Off"}

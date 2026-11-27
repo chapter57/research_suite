@@ -415,7 +415,7 @@ export function PlayerInner({
                 <span><i style={{ background: "var(--coach)" }} />AI coach</span>
                 <span><i style={{ background: "var(--paste)" }} />Paste</span>
                 <span><i style={{ background: "var(--muted)" }} />New session</span>
-                <span><i style={{ background: "var(--danger)" }} />Private writing</span>
+                {stats.privateGaps > 0 && <span><i style={{ background: "var(--danger)" }} />Private writing</span>}
               </div>
             </div>
           )}
