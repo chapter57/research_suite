@@ -43,6 +43,11 @@ create table if not exists public.reflections (
 create index if not exists reflections_project_idx on public.reflections (project_id);
 
 -- ---------- Security: owners only ----------
+-- Signed-in users may use these tables (the policies below limit them to their own rows).
+-- Signed-out visitors get nothing.
+grant select, insert, update, delete on public.projects, public.event_chunks, public.reflections to authenticated;
+revoke all on public.projects, public.event_chunks, public.reflections from anon;
+
 alter table public.projects enable row level security;
 alter table public.event_chunks enable row level security;
 alter table public.reflections enable row level security;
